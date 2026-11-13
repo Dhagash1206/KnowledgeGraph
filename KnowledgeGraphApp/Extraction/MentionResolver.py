@@ -6,15 +6,12 @@ links without collapsing distinct mentions into single nodes before relation ext
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, Any, Optional
 
 from KnowledgeGraphApp.GraphStorage.EntityResolver import (
     EntityResolver,
-    compute_initials_key,
     _tokenize,
     _abbreviation_score,
-    _is_person_name_conflict,
 )
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord, IdentityLinkRecord
 

@@ -14,7 +14,6 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from KnowledgeGraphApp.Settings import get_settings
 from KnowledgeGraphApp.ExtractionPipeline import run_pipeline
 
 

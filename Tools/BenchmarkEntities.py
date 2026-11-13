@@ -6,7 +6,7 @@ and B-cubed cluster metrics without collapsing candidates or generating self-lin
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
+from collections import Counter
 import json
 from pathlib import Path
 import sys
@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from KnowledgeGraphApp.Ingestion.Preprocessor import get_nlp
 from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner
-from KnowledgeGraphApp.GraphStorage.EntityResolver import EntityResolver
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord
 from KnowledgeGraphApp.Extraction.MentionResolver import (
     NonDestructiveResolver,

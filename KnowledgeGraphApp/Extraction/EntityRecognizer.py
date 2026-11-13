@@ -10,10 +10,9 @@ Spans from all three layers are merged by the span_merger module.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-import spacy
 from spacy.tokens import Doc
 
 from KnowledgeGraphApp.TypeMapping import SPACY_TO_INTERNAL, NODE_TYPES

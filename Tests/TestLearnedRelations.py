@@ -66,7 +66,9 @@ def test_missing_or_incompatible_artifact_fails_explicitly(tmp_path):
 
 
 def test_train_dev_overlap_excluded_without_changing_dev():
-    record = lambda title, words: {"title": title, "sents": [words.split()], "vertexSet": []}
+    def record(title, words):
+        return {"title": title, "sents": [words.split()], "vertexSet": []}
+
     dev = [record("Dev", "same text")]
     training = [record("different title", "same text"), record("DEV", "other text"),
                 record("Train", "training text"), record("Train", "training text")]

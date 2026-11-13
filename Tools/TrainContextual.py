@@ -10,12 +10,11 @@ import argparse
 from collections import defaultdict
 import hashlib
 import json
-import os
 from pathlib import Path
 import random
 import sys
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -26,10 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord
 from KnowledgeGraphApp.Extraction.ContextualRelations import (
     RELATION_TYPES,
-    POLARITY_TYPES,
-    MODALITY_TYPES,
-    LIFECYCLE_TYPES,
-    RELATION_TO_IDX,
     POLARITY_TO_IDX,
     MODALITY_TO_IDX,
     LIFECYCLE_TO_IDX,
@@ -37,7 +32,6 @@ from KnowledgeGraphApp.Extraction.ContextualRelations import (
     ContextualRelationModel,
     build_marked_context,
     compute_masked_loss,
-    load_ontology_type_pairs,
 )
 from KnowledgeGraphApp.Extraction.SplitCustody import verify_split_custody, verify_cross_split_disjointness
 

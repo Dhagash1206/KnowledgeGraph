@@ -9,11 +9,10 @@ using four pattern types:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 import re
 
-import spacy
 from spacy.tokens import Doc, Token, Span
 
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity
@@ -457,11 +456,6 @@ class DepPatternExtractor:
                 and token.text.lower() in {"in", "at"}
                 and pobj is not None
             ):
-                verb_subject = next(
-                    (child for child in governor.children
-                     if child.dep_ in {"nsubj", "nsubjpass"}),
-                    None,
-                )
                 verb_object = next(
                     (child for child in governor.children
                      if child.dep_ in {"dobj", "attr", "oprd"}),

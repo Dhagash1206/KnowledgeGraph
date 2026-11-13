@@ -1,12 +1,9 @@
 """Integration tests for Milestone G: contextual_v2 backend and claim aggregation."""
 from __future__ import annotations
 
-import pytest
 
 from KnowledgeGraphApp.Settings import get_settings
 from KnowledgeGraphApp.Extraction.ContractsV2 import (
-    CanonicalClaimRecord,
-    MentionRecord,
     RelationClaimRecord,
 )
 from KnowledgeGraphApp.Extraction.ClaimAggregation import aggregate_claims

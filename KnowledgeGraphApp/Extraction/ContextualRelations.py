@@ -6,9 +6,6 @@ and strict masked loss that never trains unknown labels as supervised negative z
 """
 from __future__ import annotations
 
-import json
-import math
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -46,7 +43,7 @@ IDX_TO_RELATION: Dict[int, str] = {i: r for i, r in enumerate(RELATION_TYPES)}
 
 POLARITY_TO_IDX: Dict[str, int] = {p: i for i, p in enumerate(POLARITY_TYPES)}
 MODALITY_TO_IDX: Dict[str, int] = {m: i for i, m in enumerate(MODALITY_TYPES)}
-LIFECYCLE_TO_IDX: Dict[str, int] = {l: i for i, l in enumerate(LIFECYCLE_TYPES)}
+LIFECYCLE_TO_IDX: Dict[str, int] = {lifecycle: i for i, lifecycle in enumerate(LIFECYCLE_TYPES)}
 
 SUBJ_START_TOKEN = "[SUBJ_START]"
 SUBJ_END_TOKEN = "[SUBJ_END]"
@@ -429,11 +426,11 @@ def compute_masked_loss(
             r_masks = assertion_masks_by_rel.get(r_name, {})
 
             for attr in ["polarity", "modality", "lifecycle"]:
-                l = r_logits.get(attr)
+                attr_logits = r_logits.get(attr)
                 t = r_tgts.get(attr)
                 m = r_masks.get(attr)
-                if l is not None and t is not None and m is not None and m.any():
-                    ce = F.cross_entropy(l, t, reduction="none")
+                if attr_logits is not None and t is not None and m is not None and m.any():
+                    ce = F.cross_entropy(attr_logits, t, reduction="none")
                     m_f = m.float()
                     denom = m_f.sum().clamp(min=1.0)
                     a_loss = (ce * m_f).sum() / denom

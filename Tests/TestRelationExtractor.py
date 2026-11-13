@@ -1,5 +1,4 @@
 """Tests for dependency-pattern relation extraction."""
-import pytest
 from KnowledgeGraphApp.Extraction.RelationExtractor import DepPatternExtractor
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity
 

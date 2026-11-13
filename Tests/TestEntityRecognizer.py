@@ -1,5 +1,4 @@
 """Tests for Named Entity Recognition (NER) pipeline."""
-import pytest
 from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner, regex_entities, GazetteerMatcher
 
 

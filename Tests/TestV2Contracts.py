@@ -4,10 +4,7 @@ from pydantic import ValidationError
 from KnowledgeGraphApp.Extraction.ContractsV2 import (
     DocumentRecord,
     MentionRecord,
-    IdentityLinkRecord,
-    RelationCandidateRecord,
     RelationClaimRecord,
-    CanonicalClaimRecord,
     DocumentAnnotationPayload,
 )
 

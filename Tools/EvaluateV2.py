@@ -26,18 +26,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from KnowledgeGraphApp.Ingestion.Preprocessor import get_nlp
-from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord, RelationClaimRecord
+from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord
 from KnowledgeGraphApp.Extraction.MentionResolver import NonDestructiveResolver
 from KnowledgeGraphApp.Extraction.ContextualRelations import (
     RELATION_TYPES,
-    POLARITY_TYPES,
-    MODALITY_TYPES,
-    LIFECYCLE_TYPES,
     SimpleVocabulary,
     ContextualRelationModel,
     ContextualRelationExtractor,
-    generate_directional_candidates,
-    load_ontology_type_pairs,
 )
 from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner
 

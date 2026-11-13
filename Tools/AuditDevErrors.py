@@ -1,7 +1,7 @@
 """Audit development errors from learned relations baseline."""
 import json
 from pathlib import Path
-from collections import Counter, defaultdict
+from collections import Counter
 
 def audit():
     data = json.loads(Path("EvaluationResults/Evaluation/HandoffLearnedDev.json").read_text(encoding="utf-8"))

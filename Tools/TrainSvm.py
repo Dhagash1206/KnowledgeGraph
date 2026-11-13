@@ -29,7 +29,7 @@ def main():
     splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
     ti, vi = next(splitter.split(records, [r['label'] for r in records], groups))
     train, val = [records[i] for i in ti], [records[i] for i in vi]
-    results, best, best_model = [], -1, None
+    results, best = [], -1
     start = time.perf_counter()
     for stages in (False, True):
         for c in (0.01, 0.1, 1, 10):
@@ -40,13 +40,15 @@ def main():
                 results.append(row)
                 print(f'{stages=} {c=} {weight=} dev F1={metrics["macro_f1"]:.4f}', flush=True)
                 if metrics['macro_f1'] > best:
-                    best, best_model, selected = metrics['macro_f1'], model, row
+                    best, selected = metrics['macro_f1'], row
     (args.output/'Development.json').write_text(json.dumps(dict(
         train_ids=[r['example_id'] for r in train], validation_ids=[r['example_id'] for r in val],
         runs=results, selected=selected), indent=2), encoding='utf-8')
     final = UTDSVM(selected['c'], selected['class_weight'], selected['two_stage']).fit(records)
     joblib.dump(final, args.output/'Model.joblib')
-    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    def digest(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
     manifest = dict(schema_version='1.lexical_svm', system='UTD-inspired lexical baseline',
         sklearn_version=sklearn.__version__, training_count=len(records), seed=42,
         train_sha256=digest(train_path), model_sha256=digest(args.output/'Model.joblib'),

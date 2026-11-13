@@ -1,7 +1,7 @@
 """Shared artifact validator enforcing model rejection and calibration eligibility at runtime."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path

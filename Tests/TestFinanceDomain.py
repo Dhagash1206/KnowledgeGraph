@@ -1,6 +1,5 @@
 """Domain regression tests for Corporate Finance, M&A, and Venture Capital."""
 from pathlib import Path
-import pytest
 
 from KnowledgeGraphApp.Ingestion.DocumentLoader import load_document
 from KnowledgeGraphApp.Ingestion.Preprocessor import preprocess, build_windows, get_nlp
@@ -70,7 +69,6 @@ def test_tech_venture_and_ma_extraction():
     assert len(entities) >= 15
     assert len(edges) >= 10
 
-    edge_tuples = {(e.source_id, e.relation_type, e.target_id) for e in edges}
     edge_types = {e.relation_type for e in edges}
 
     # Core relations must be asserted

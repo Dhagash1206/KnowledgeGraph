@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 import sys
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -24,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord
 from KnowledgeGraphApp.Extraction.ContextualRelations import (
     RELATION_TYPES,
-    RELATION_TO_IDX,
     SimpleVocabulary,
     ContextualRelationModel,
     generate_directional_candidates,
@@ -132,7 +131,6 @@ def run_calibration(
             doc_id = doc["document_id"]
             text = doc["text"]
             mentions = [MentionRecord.model_validate(m) for m in doc["mentions"]]
-            mentions_by_id = {m.id: m for m in mentions}
 
             mid_to_group: Dict[str, str] = {}
             for gid, mids in doc.get("annotated_groups", {}).items():
@@ -291,7 +289,6 @@ def run_calibration(
             }
             continue
 
-        best_thresh = 0.50
         best_f1 = -1.0
         best_p = 0.0
         best_r = 0.0
@@ -313,7 +310,6 @@ def run_calibration(
 
             if f1 > best_f1:
                 best_f1 = f1
-                best_thresh = thresh
                 best_p = p
                 best_r = r
 

@@ -8,9 +8,9 @@ os.environ['HF_HOME'] = str(ROOT / '.runtime/huggingface')
 os.environ['HF_HUB_DISABLE_XET'] = '1'
 os.environ['USE_TF'] = '0'
 os.environ['HF_HUB_OFFLINE'] = '1'
-import json
-import torch
-from glirel import GLiREL
+import json  # noqa: E402 - imported after sys.path setup
+import torch  # noqa: E402 - imported after sys.path setup
+from glirel import GLiREL  # noqa: E402 - imported after sys.path setup
 
 torch.set_num_threads(2)
 repo = 'jackboyla/glirel-large-v0'

@@ -11,11 +11,10 @@ import logging
 import os
 import queue
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

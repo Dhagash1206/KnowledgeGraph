@@ -12,23 +12,21 @@ Measures:
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
 import datetime
-import hashlib
 import json
 import logging
 from pathlib import Path
 import random
 import sys
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 # Ensure repository root is on sys.path
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
-from KnowledgeGraphApp.Extraction.ClassicalNews import ClassicalNewsExtractor
+from KnowledgeGraphApp.Extraction.ClassicalNews import ClassicalNewsExtractor  # noqa: E402 - imported after sys.path setup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

@@ -1,5 +1,4 @@
 """Tests for rule-based coreference resolution."""
-import pytest
 from KnowledgeGraphApp.Ingestion.Preprocessor import SentenceChunk
 from KnowledgeGraphApp.Extraction.CorefResolver import RuleBasedCorefResolver
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity

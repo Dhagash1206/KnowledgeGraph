@@ -69,7 +69,8 @@ def prepare(args):
     for name in ('dev', 'test'):
         for record in records[name]:
             title, text = record_keys(record)
-            blocked_titles.add(title); blocked_texts.add(text)
+            blocked_titles.add(title)
+            blocked_texts.add(text)
     if args.output.exists():
         raise FileExistsError('Use a new output directory; existing datasets are immutable')
     args.output.mkdir(parents=True)
@@ -85,7 +86,8 @@ def prepare(args):
                         exclusions.append({'source_index': index, 'title': record['title'],
                                            'reason': 'title/text overlap with regression data or earlier training record'})
                         continue
-                    blocked_titles.add(title); blocked_texts.add(text)
+                    blocked_titles.add(title)
+                    blocked_texts.add(text)
                     split = development_split(title)
                 else:
                     split = f'regression_{origin}'

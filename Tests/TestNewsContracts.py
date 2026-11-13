@@ -1,21 +1,16 @@
 """Contract, mapping, and boundary regression tests for Classical News backend."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from KnowledgeGraphApp.Settings import get_settings
-from KnowledgeGraphApp.GraphStorage.GraphBuilder import ResolvedEdge, ResolvedEntity
 from KnowledgeGraphApp.Extraction.ClassicalNews import (
     ClassicalNewsExtractor,
     RELATION_MAP,
-    TYPE_MAP,
-    VALID_TYPE_PAIRS,
 )
-from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord, RelationClaimRecord
 from KnowledgeGraphApp.Extraction.StanfordClient import (
     StanfordClassicalClient,
     build_utf16_to_codepoint_map,
@@ -167,7 +162,7 @@ def test_missing_runtime_fails_closed():
     fake_client = StanfordClassicalClient(java_bin=Path("C:/nonexistent/java.exe"))
     assert fake_client.is_available() is False
 
-    extractor = ClassicalNewsExtractor(client=fake_client)
+    ClassicalNewsExtractor(client=fake_client)
     with pytest.raises(RuntimeError) as exc_info:
         fake_client.start()
     assert "not found" in str(exc_info.value).lower()

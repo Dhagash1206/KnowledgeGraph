@@ -1,5 +1,4 @@
 """Tests for span_merger — verifies the v4 bug fix (candidates built inside loop)."""
-import pytest
 from KnowledgeGraphApp.Extraction.SpanMerger import merge_spans
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity
 

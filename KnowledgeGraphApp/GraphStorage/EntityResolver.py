@@ -358,7 +358,6 @@ class EntityResolver:
     def train(gold_path: str) -> dict:
         """Train LR on ResolutionGold.jsonl with k-fold CV."""
         import joblib
-        import numpy as np
         from sklearn.linear_model import LogisticRegression
         from sklearn.model_selection import StratifiedKFold, cross_val_score
         from sklearn.preprocessing import StandardScaler

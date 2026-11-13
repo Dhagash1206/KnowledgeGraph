@@ -9,7 +9,7 @@ import hashlib
 import logging
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 

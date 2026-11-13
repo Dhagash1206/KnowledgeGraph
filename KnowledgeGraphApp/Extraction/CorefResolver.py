@@ -12,7 +12,6 @@ substitute pronoun subjects/objects with their cluster-head entity ID.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Optional
 import re
 

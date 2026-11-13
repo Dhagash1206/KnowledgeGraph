@@ -9,14 +9,10 @@ import torch
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord, RelationClaimRecord
 from KnowledgeGraphApp.Extraction.ContextualRelations import (
     RELATION_TYPES,
-    POLARITY_TYPES,
-    MODALITY_TYPES,
-    LIFECYCLE_TYPES,
     LIFECYCLE_TO_IDX,
     SimpleVocabulary,
     ContextualRelationModel,
     ContextualRelationExtractor,
-    build_marked_context,
 )
 from Tools.TrainContextual import (
     extract_samples_from_records,

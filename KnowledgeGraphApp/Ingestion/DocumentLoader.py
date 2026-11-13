@@ -6,7 +6,6 @@ responsible for sentence splitting, normalization, and chunking.
 from __future__ import annotations
 
 import io
-from pathlib import Path
 from KnowledgeGraphApp.Ingestion.TextValidation import validate_text
 
 

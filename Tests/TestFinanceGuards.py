@@ -36,12 +36,14 @@ def test_pending_annotation_never_supervises(decision):
 
 @pytest.mark.parametrize('field,value', [('review_status', 'pending_human_review'), ('data_origin', 'unverified')])
 def test_document_review_gate_masks_claimed_reviewed_annotations(field, value):
-    doc = fixture(); doc[field] = value
+    doc = fixture()
+    doc[field] = value
     assert all(not any(c['loss_mask']) for c in convert(doc)['candidates'])
 
 
 def test_reviewed_document_requires_timestamp():
-    doc = fixture(); doc['review_timestamp'] = None
+    doc = fixture()
+    doc['review_timestamp'] = None
     with pytest.raises(ValidationError, match='timestamp'):
         ReviewedDocumentPayload.model_validate(doc)
 
@@ -71,7 +73,8 @@ def test_each_relation_retains_its_own_status_evidence_and_reviewer():
 def test_duplicate_relation_statuses_cannot_silently_overwrite():
     doc = fixture()
     a = doc['relation_annotations'][0]
-    b = copy.deepcopy(a); b.update(annotation_id='other_event', lifecycle='cancelled')
+    b = copy.deepcopy(a)
+    b.update(annotation_id='other_event', lifecycle='cancelled')
     doc['relation_annotations'] = [a, b]
     with pytest.raises(ValidationError, match='requires adjudication'):
         ReviewedDocumentPayload.model_validate(doc)

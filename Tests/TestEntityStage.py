@@ -1,5 +1,4 @@
 """Tests for entity stage benchmarking, B-cubed metrics, and non-destructive resolution."""
-import pytest
 from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord
 from KnowledgeGraphApp.Extraction.MentionResolver import (
     pairwise_merge_metrics,
@@ -70,8 +69,8 @@ def test_nondestructive_resolver_preserves_mentions_and_rejects_conflicts():
     # 3. Person surname conflict: John Smith and Jane Smith must NOT be linked
     assert mapping["m3"] != mapping["m4"]
     conflict_link = next(
-        l for l in links
-        if {l.source_mention_id, l.target_mention_id} == {"m3", "m4"}
+        link for link in links
+        if {link.source_mention_id, link.target_mention_id} == {"m3", "m4"}
     )
     assert conflict_link.decision == "unlinked"
     assert conflict_link.method == "person_surname_conflict"

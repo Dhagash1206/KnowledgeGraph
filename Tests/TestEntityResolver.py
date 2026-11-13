@@ -1,5 +1,4 @@
 """Tests for entity resolver — blocking, scoring, initials key."""
-import pytest
 from KnowledgeGraphApp.GraphStorage.EntityResolver import (
     compute_initials_key, _token_overlap_ratio,
     _abbreviation_score, build_candidate_pairs, EntityResolver,

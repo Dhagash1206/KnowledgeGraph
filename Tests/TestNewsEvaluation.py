@@ -1,7 +1,6 @@
 """Unit tests for classical news evaluation and dataset split integrity."""
 import json
 from pathlib import Path
-import pytest
 
 from Tools.EvaluateClassicalNews import compute_prf1, audit_feasibility_gates
 

@@ -17,13 +17,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity
 from KnowledgeGraphApp.Extraction.RelationExtractor import RawTriple
-from KnowledgeGraphApp.TypeMapping import NODE_TYPES
 
 
 # ── Output type ───────────────────────────────────────────────────────────────

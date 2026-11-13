@@ -1,5 +1,4 @@
 """End-to-end pipeline integration test."""
-import pytest
 from KnowledgeGraphApp.Ingestion.Preprocessor import preprocess, build_windows
 from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner
 from KnowledgeGraphApp.Extraction.CorefResolver import RuleBasedCorefResolver

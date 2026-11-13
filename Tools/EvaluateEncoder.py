@@ -7,14 +7,14 @@ sys.path.insert(0, str(ROOT))
 os.environ['USE_TF'] = '0'
 os.environ['HF_HOME'] = str(ROOT / '.runtime/huggingface')
 os.environ['HF_HUB_OFFLINE'] = '1'
-import argparse
-from collections import Counter
-import hashlib
-import json
-from Tools.EvaluateExternal import reconstruct, gold_facts, graph_predictions, metrics, summarize
-from KnowledgeGraphApp.Settings import get_settings
-from KnowledgeGraphApp.ExtractionPipeline import run_pipeline_nlp
-from KnowledgeGraphApp.Extraction.EncoderRelations import REPOSITORY, REVISION
+import argparse  # noqa: E402 - imported after sys.path setup
+from collections import Counter  # noqa: E402 - imported after sys.path setup
+import hashlib  # noqa: E402 - imported after sys.path setup
+import json  # noqa: E402 - imported after sys.path setup
+from Tools.EvaluateExternal import reconstruct, gold_facts, graph_predictions, metrics, summarize  # noqa: E402 - imported after sys.path setup
+from KnowledgeGraphApp.Settings import get_settings  # noqa: E402 - imported after sys.path setup
+from KnowledgeGraphApp.ExtractionPipeline import run_pipeline_nlp  # noqa: E402 - imported after sys.path setup
+from KnowledgeGraphApp.Extraction.EncoderRelations import REPOSITORY, REVISION  # noqa: E402 - imported after sys.path setup
 
 
 def main(args):

@@ -143,8 +143,8 @@ OpenJDK 17, CoreNLP 4.5.8 and its matching English model jar. The current client
 expects the following local runtime layout.
 
 ```text
-.runtime/jdk17/bin/java.exe
-.runtime/jdk17/bin/javac.exe
+.runtime/jdk17/bin/java      (java.exe on Windows)
+.runtime/jdk17/bin/javac     (javac.exe on Windows)
 .runtime/stanford_classical/stanford-corenlp-4.5.8.jar
 .runtime/stanford_classical/stanford-corenlp-4.5.8-models.jar
 .runtime/stanford_classical/lib/

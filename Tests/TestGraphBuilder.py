@@ -7,7 +7,6 @@ from KnowledgeGraphApp.Extraction.PredicateNormalizer import NormalizedTriple
 from KnowledgeGraphApp.GraphStorage.GraphBuilder import (
     build_resolved_entities,
     build_resolved_edges,
-    ResolvedEntity,
     ResolvedEdge,
     GraphBuilder,
 )

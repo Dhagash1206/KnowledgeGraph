@@ -7,11 +7,10 @@ must never be presented as independent gold truth without human adjudication.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -60,7 +59,6 @@ def propose_annotations_for_text(
             score=0.9,
         ))
 
-    mentions_by_id = {m.id: m for m in mentions}
     relations_cfg = ontology.get("relations", {})
     annotations = []
     ann_idx = 0

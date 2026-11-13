@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import List, Dict, Set, Tuple, Any
+from typing import Set
 
 
 def compute_content_hash(text: str) -> str:

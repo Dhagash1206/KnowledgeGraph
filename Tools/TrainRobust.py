@@ -42,7 +42,8 @@ def collect(records, allowed, cache):
     # Include code and data identity so changed extraction cannot reuse stale rows.
     digest = hashlib.sha256(json.dumps(records, sort_keys=True).encode())
     for path in sorted(Path('KnowledgeGraphApp').rglob('*.py')):
-        digest.update(path.as_posix().encode()); digest.update(path.read_bytes())
+        digest.update(path.as_posix().encode())
+        digest.update(path.read_bytes())
     fingerprint = digest.hexdigest()
     if cache.exists():
         saved = joblib.load(cache)
@@ -92,17 +93,20 @@ def score_rows(extractor, rows):
 
 
 def report_scores(scores, keys, gold, thresholds):
-    counts = Counter(); per_label = {}
+    counts = Counter()
+    per_label = {}
     for j, relation in enumerate(RELATION_TYPES):
         predictions = {k for k, s in zip(keys, scores[:, j]) if s >= thresholds[relation]}
         c = dict(tp=len(predictions & gold[j]), fp=len(predictions - gold[j]), fn=len(gold[j] - predictions))
-        counts.update(c); per_label[relation] = summarize(c)
+        counts.update(c)
+        per_label[relation] = summarize(c)
     return {'overall': summarize(counts), 'per_label': per_label}
 
 
 def main(args):
     old = joblib.load('TrainedModels/LearnedRelations.joblib')
-    settings = get_settings(); settings.relation_backend = 'learned'
+    settings = get_settings()
+    settings.relation_backend = 'learned'
     settings.learned_relation_model_path = str(Path('TrainedModels/LearnedRelations.joblib').resolve())
     train_path = Path('Datasets/External/ReDocRed/train_revised.json')
     dev_path = Path('Datasets/External/ReDocRed/dev_revised.json')
@@ -116,7 +120,8 @@ def main(args):
     y = np.asarray([v for row in train_rows for v in row['y']], dtype=np.int8)
     # Preserve clean positive coverage while learning actual production noise.
     clean, clean_y, _, _, _ = examples(train, allowed, False)
-    pairs += clean; y = np.concatenate([y, clean_y])
+    pairs += clean
+    y = np.concatenate([y, clean_y])
     print(f'Fitting {len(pairs)} pairs; positives={y.sum(axis=0).tolist()}', flush=True)
     vectorizer = TfidfVectorizer(ngram_range=(1, 3), max_features=150000, min_df=2, sublinear_tf=True,
                                  strip_accents='unicode', dtype=np.float64)
@@ -125,7 +130,8 @@ def main(args):
     with threadpool_limits(limits=2):
         for j, relation in enumerate(RELATION_TYPES):
             model = LogisticRegression(C=4, solver='liblinear', max_iter=500, random_state=20261110)
-            model.fit(x, y[:, j]); classifiers.append(model)
+            model.fit(x, y[:, j])
+            classifiers.append(model)
     artifact = {**old, 'vectorizer': vectorizer, 'classifiers': classifiers, 'thresholds': {},
                 'metadata': {'training': 'all gold and production candidates, no class balancing or negative sampling',
                              'train_documents': len(train), 'excluded_training_titles': excluded,

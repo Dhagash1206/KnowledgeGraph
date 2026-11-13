@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from KnowledgeGraphApp.Settings import get_settings
-from KnowledgeGraphApp.GraphStorage.GraphBuilder import ResolvedEdge, ResolvedEntity
 from KnowledgeGraphApp.Extraction.ClassicalNews import ClassicalNewsExtractor
 from KnowledgeGraphApp.Extraction.StanfordClient import get_shared_stanford_client
 from KnowledgeGraphApp.ExtractionPipeline import run_pipeline_nlp

@@ -12,15 +12,14 @@ import json
 import logging
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List
 
 # Ensure repository root is on sys.path
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
-from KnowledgeGraphApp.Extraction.ContractsV2 import MentionRecord, ReviewedRelationAnnotation
-from KnowledgeGraphApp.Extraction.Deduplication import analyze_duplicates_and_groups, compute_content_hash
+from KnowledgeGraphApp.Extraction.Deduplication import analyze_duplicates_and_groups, compute_content_hash  # noqa: E402 - imported after sys.path setup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -630,7 +629,6 @@ def extract_gold_for_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     for i, m in enumerate(clean_mentions):
         m["id"] = f"m{i}"
 
-    mentions_by_id = {m["id"]: m for m in clean_mentions}
 
     # Extract target relations based on gold semantic patterns in text
     # 1. BASED_IN: Org is headquartered in Loc / Org is based in Loc
@@ -773,7 +771,7 @@ def main():
         {"document_id": d["document_id"], "text": d["text"], "doc_group": d["group_key"]}
         for d in processed_docs
     ]
-    clusters = analyze_duplicates_and_groups(dedup_input, near_threshold=0.85)
+    analyze_duplicates_and_groups(dedup_input, near_threshold=0.85)
 
     # Verify group isolation across splits
     split_by_group: Dict[str, str] = {}

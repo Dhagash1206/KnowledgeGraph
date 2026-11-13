@@ -5,9 +5,8 @@ import pytest
 from pydantic import ValidationError
 
 from KnowledgeGraphApp.Extraction.ContractsV2 import ReviewedDocumentPayload, ReviewedRelationAnnotation, MentionRecord
-from KnowledgeGraphApp.Extraction.Deduplication import compute_content_hash, normalize_for_dedup, analyze_duplicates_and_groups
-from KnowledgeGraphApp.Extraction.DatasetV2 import finance_split
-from Tools.ImportFinanceReviews import import_finance_data, convert_reviewed_document
+from KnowledgeGraphApp.Extraction.Deduplication import analyze_duplicates_and_groups
+from Tools.ImportFinanceReviews import import_finance_data
 from Tools.ProposeFinanceAnnotations import propose_annotations_for_text
 
 

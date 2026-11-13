@@ -1,6 +1,6 @@
 """Unit tests for QueryEngine and RankingEngine."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from KnowledgeGraphApp.GraphSearch.QueryEngine import QueryEngine
 from KnowledgeGraphApp.GraphSearch.EntityRanking import RankingEngine

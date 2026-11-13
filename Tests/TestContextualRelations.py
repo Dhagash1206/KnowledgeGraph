@@ -1,7 +1,6 @@
 """Tests for contextual relation modeling and masked loss in Milestone E."""
 from __future__ import annotations
 
-import pytest
 import torch
 
 from KnowledgeGraphApp.Extraction.ContextualRelations import (
