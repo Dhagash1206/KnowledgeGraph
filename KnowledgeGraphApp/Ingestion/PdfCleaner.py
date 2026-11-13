@@ -76,6 +76,31 @@ def strip_tables(text: str) -> str:
     return "\n".join(lines)
 
 
+# ── Title line ────────────────────────────────────────────────────────────────
+
+def _separate_title_line(text: str) -> str:
+    """Keep a leading title on its own line so it is not read as part of sentence one.
+
+    A title is a short first line in title case with no closing punctuation,
+    followed by body text. Joining it to the body turns the title into an
+    entity ("AI Research Collaboration Report On 15 March ...").
+    """
+    stripped = text.lstrip()
+    first_line, separator, rest = stripped.partition("\n")
+    words = first_line.split()
+    if not separator or not rest.strip() or rest.startswith("\n"):
+        return text
+    capitalized = sum(1 for word in words if word[:1].isupper())
+    if (
+        2 <= len(words) <= 12
+        and first_line.rstrip()[-1] not in ".!?,;:"
+        and capitalized >= 0.6 * len(words)
+        and rest.lstrip()[:1].isupper()
+    ):
+        return first_line + "\n\n" + rest
+    return text
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def clean_pdf_text(text: str) -> str:
@@ -91,6 +116,7 @@ def clean_pdf_text(text: str) -> str:
     text = heading.sub("\n\n", text)
     text = re.sub(r"^\s*Page\s+\d+(?:\s+of\s+\d+)?\s*$", "", text, flags=re.M | re.I)
     text = strip_tables(text)
+    text = _separate_title_line(text)
     # PDF line wraps are layout, not sentence boundaries. Preserve paragraphs.
     text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
     # Normalize whitespace

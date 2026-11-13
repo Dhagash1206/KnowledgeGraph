@@ -25,6 +25,18 @@ _ROLE = (r"Chief\s+(?:Executive|Financial|Technology|Operating)\s+Officer|"
          r"founder(?:\s+and\s+CEO)?|CEO|CFO|CTO")
 _ROLE_PERSON = re.compile(rf"\b(?:{_ROLE}),?\s+(?P<name>{_WORD}(?:\s+{_WORD}){{1,2}})\b")
 _PRODUCT = re.compile(rf"\b(?:platform|product|division|software),\s+(?P<name>{_NAME})(?=[,.])")
+_CAMEL = r"[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*"
+_PRODUCT_KIND = r"(?:project|platform|product|system|tool|software|application|app|framework|library)"
+# "a project called DocSense" / "the DocSense platform"
+_NAMED_PRODUCT = re.compile(
+    rf"\b{_PRODUCT_KIND}\s+(?:called|named|known\s+as)\s+(?P<name>{_WORD}(?:\s+{_WORD}){{0,3}})")
+_KIND_OF_PRODUCT = re.compile(rf"\b[Tt]he\s+(?P<name>{_CAMEL})\s+{_PRODUCT_KIND}\b")
+# "Grant Thornton Bharat conducted financial due diligence": the subject of
+# a professional engagement is a firm, whatever the model guessed.
+_SERVICE_FIRM = re.compile(
+    rf"(?P<name>{_WORD}(?:\s+{_WORD}){{1,4}})\s+(?:conducted|performed|carried\s+out|completed)\s+"
+    r"(?:(?:a|an|the)\s+)?(?:[\w-]+\s+){0,3}(?:due\s+diligence|audit|assessment|valuation)\b")
+_ABBREVIATED_SUFFIX = re.compile(r"(?:Ltd|Inc)\.$")
 _INSTITUTION = re.compile(rf"\b(?:{_WORD}\s+){{0,3}}(?:Stock Exchange|Commission)\s+of\s+{_WORD}\b")
 _LEGAL_SUFFIX = re.compile(r"\s+(?:(?:Pvt|Private)\.?\s+)?(?:Ltd|Limited|LLP|LLC|Inc)\.?$", re.I)
 _FISCAL = re.compile(r"FY\d{2,4}(?:\s+and\s+FY\d{2,4})?", re.I)
@@ -46,9 +58,14 @@ def recover_document_entities(chunks, entities_by_chunk):
             repaired[chunk.chunk_id] = []
             continue
         context = []
-        for pattern, kind in ((_ORG, "ORG"), (_INSTITUTION, "ORG"), (_ROLE_PERSON, "PERSON"), (_PRODUCT, "PRODUCT")):
+        for pattern, kind in ((_ORG, "ORG"), (_INSTITUTION, "ORG"), (_ROLE_PERSON, "PERSON"),
+                              (_PRODUCT, "PRODUCT"), (_NAMED_PRODUCT, "PRODUCT"),
+                              (_KIND_OF_PRODUCT, "PRODUCT"), (_SERVICE_FIRM, "ORG")):
             for match in pattern.finditer(chunk.text):
                 start, end = match.span("name") if "name" in match.re.groupindex else match.span()
+                # A sentence-ending period is not part of "Union National Bank."
+                if chunk.text[start:end].endswith(".") and not _ABBREVIATED_SUFFIX.search(chunk.text[start:end]):
+                    end -= 1
                 context.append(make(chunk, start, end, kind))
         # Location modifiers provide stronger evidence than a guessed ORG label.
         for match in re.finditer(rf"\b({_WORD}(?:\s+{_WORD})?)-based\b", chunk.text):
@@ -81,7 +98,7 @@ def recover_document_entities(chunks, entities_by_chunk):
             if len(subjects) == 1:
                 subject = subjects[0]
                 target = definitions.get(subject.text.casefold(), {(subject.canonical_name, "ORG")})
-                definitions[ticker.group(1).casefold()].update(target)
+                definitions[ticker.group(1).rstrip(".").casefold()].update(target)
 
     # A surname is usable only if it identifies exactly one full person name.
     people = defaultdict(set)
@@ -92,6 +109,11 @@ def recover_document_entities(chunks, entities_by_chunk):
     for name, targets in people.items():
         if len(targets) == 1:
             definitions[name].update(targets)
+    # A full name seen once as a person is that person everywhere, even where
+    # the model split it or labelled a part as a place ("Ananya" as GPE).
+    for targets in list(people.values()):
+        for canonical, kind in targets:
+            definitions[canonical.casefold()].add((canonical, kind))
 
     known = {name: next(iter(targets)) for name, targets in definitions.items() if len(targets) == 1}
     # Prefer the explicit legal name when a short name also has its own seed.

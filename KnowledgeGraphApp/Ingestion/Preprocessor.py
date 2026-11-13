@@ -119,19 +119,25 @@ def preprocess(
     doc = nlp(text)
 
     chunks: list[SentenceChunk] = []
-    for idx, sent in enumerate(doc.sents):
-        sent_text = sent.text.strip()
-        if not sent_text:
-            continue
-        chunk_id = f"{doc_id}:{idx}"
-        chunks.append(SentenceChunk(
-            chunk_id=chunk_id,
-            doc_id=doc_id,
-            sent_idx=idx,
-            text=sent_text,
-            start_char=sent.start_char + len(sent.text) - len(sent.text.lstrip()),
-            end_char=sent.end_char - (len(sent.text) - len(sent.text.rstrip())),
-        ))
+    idx = 0
+    for sent in doc.sents:
+        # A sentence never spans a paragraph break: the statistical splitter
+        # otherwise glues a title or heading onto the sentence that follows it.
+        piece_start = sent.start_char
+        for piece in re.split(r"(\n{2,})", sent.text):
+            piece_text = piece.strip()
+            if piece_text:
+                start_char = piece_start + len(piece) - len(piece.lstrip())
+                chunks.append(SentenceChunk(
+                    chunk_id=f"{doc_id}:{idx}",
+                    doc_id=doc_id,
+                    sent_idx=idx,
+                    text=piece_text,
+                    start_char=start_char,
+                    end_char=start_char + len(piece_text),
+                ))
+                idx += 1
+            piece_start += len(piece)
 
     return PreprocessedDoc(
         doc_id=doc_id,

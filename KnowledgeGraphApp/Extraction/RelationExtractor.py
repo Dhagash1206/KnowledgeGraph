@@ -47,6 +47,12 @@ ROLE_NOUNS = frozenset({
 })
 
 
+_PRODUCT_KIND_NOUNS = frozenset({
+    "project", "platform", "system", "product", "tool", "software",
+    "application", "app", "framework", "library",
+})
+
+
 def _build_span_map(entities: list[Entity]) -> dict[tuple[int, int], Entity]:
     """Map (start_char, end_char) → Entity for fast lookup."""
     return {(e.start_char, e.end_char): e for e in entities}
@@ -85,6 +91,14 @@ def _token_to_entity(
                         return entity_by_id.get(coref_map[ent.entity_id], ent)
                     return ent
 
+    # 2b. "the DocSense project": a kind noun modified by a product name is that product.
+    if token.lemma_.lower() in _PRODUCT_KIND_NOUNS:
+        for modifier in token.children:
+            if modifier.dep_ == "compound":
+                for (s, e), ent in span_map.items():
+                    if ent.type == "PRODUCT" and s <= modifier.idx < e:
+                        return ent
+
     # 3. Exact string match within current chunk's span_map only
     exact_matches = [
         ent for ent in span_map.values()
@@ -104,7 +118,10 @@ def _token_to_entity(
         if not target_id:
             for chunk in token.doc.noun_chunks:
                 if chunk.start <= token.i < chunk.end:
-                    target_id = coref_map.get(
+                    # "its software" is the software, not the owner "its"
+                    # refers to; only a whole-phrase reference resolves.
+                    possessed = chunk[0].dep_ == "poss" and token.i != chunk[0].i
+                    target_id = coref_map.get(f"{chunk_id}:{chunk.text.lower()}") if possessed else coref_map.get(
                         f"{chunk_id}:ref:{chunk.start_char}",
                         coref_map.get(f"{chunk_id}:{chunk.text.lower()}"),
                     )
@@ -170,25 +187,61 @@ def _predicate(verb: Token) -> str:
     return verb.lemma_.lower()
 
 
-def _noun_phrase_product(token: Token, chunk_id: str) -> Optional[Entity]:
-    """Create a product/concept entity for a supported verb's named object."""
+_GROUP_HEAD_NOUNS = frozenset({
+    "team", "department", "committee", "board", "unit", "office", "council",
+    "group", "taskforce", "lab", "laboratory",
+})
+# Heads that name no identifiable thing once their determiner is removed
+# ("the next phase", "the first step").
+_VAGUE_HEAD_NOUNS = frozenset({
+    "phase", "stage", "step", "part", "portion", "rest", "effort", "process",
+    "work", "thing", "way", "kind", "sort", "lot", "number", "time",
+})
+_LEADING_DETERMINER = re.compile(
+    r"^(?:the|a|an|its|their|his|her|our|this|that|these|those)\s+", re.IGNORECASE)
+
+
+def _noun_phrase_concept(token: Token, chunk_id: str, first: Optional[Token] = None) -> Optional[Entity]:
+    """Create a concept entity for a supported verb's common-noun object.
+
+    A common noun phrase is not a product: it is typed CONCEPT, or ORG when
+    its head names a group of people ("the NLP team").
+    """
     for noun_chunk in token.doc.noun_chunks:
         if noun_chunk.root.i != token.i:
             continue
+        # `first` widens the phrase to a participle the parser split off.
+        if first is not None and first.i < noun_chunk.start:
+            noun_chunk = token.doc[first.i:noun_chunk.end]
         text = noun_chunk.text.strip()
-        if len(text.split()) < 2:
+        name = _LEADING_DETERMINER.sub("", " ".join(text.split()).strip(".,;:"))
+        head = noun_chunk.root.lemma_.lower()
+        if len(name.split()) < 2 or head in _VAGUE_HEAD_NOUNS:
             return None
         return Entity(
             entity_id=f"{chunk_id}:concept:{noun_chunk.start_char}:{noun_chunk.end_char}",
             text=text,
-            canonical_name=" ".join(text.split()).strip(".,;:"),
-            type="PRODUCT",
+            canonical_name=name,
+            type="ORG" if head in _GROUP_HEAD_NOUNS else "CONCEPT",
             start_char=noun_chunk.start_char,
             end_char=noun_chunk.end_char,
             source="noun_phrase",
             chunk_id=chunk_id,
             sentence=token.doc.text,
         )
+    return None
+
+
+_ROLE_VERBS = frozenset({"lead", "head", "manage", "run", "direct", "oversee"})
+
+
+def _named_by_clause(token: Token, span_map, chunk_id, coref_map, entity_by_id) -> Optional[Entity]:
+    """Resolve "a project called DocSense" to the entity it names."""
+    for clause in token.children:
+        if clause.dep_ == "acl" and clause.lemma_ in {"call", "name", "title", "dub"}:
+            for named in clause.children:
+                if named.dep_ in {"oprd", "dobj", "attr"}:
+                    return _token_to_entity(named, span_map, chunk_id, coref_map, entity_by_id)
     return None
 
 
@@ -266,7 +319,23 @@ class DepPatternExtractor:
                 of = next((c for c in obj_tok.children if c.dep_ == "prep" and c.lower_ == "of"), None)
                 if of is not None:
                     obj_tok = next((c for c in of.children if c.dep_ == "pobj"), obj_tok)
+            # "uses named entity recognition": the parser reads the modifier
+            # "named" as a verb, leaving "uses" without an object.
+            participle = None
+            if obj_tok is None and token.lemma_ in {"use", "provide", "develop"}:
+                participle = next((c for c in token.children
+                                   if c.dep_ == "xcomp" and c.tag_ == "VBN" and c.i == token.i + 1), None)
+                if participle is not None:
+                    obj_tok = next((c for c in participle.children if c.dep_ in {"oprd", "dobj"}), None)
             if subj_tok is None or obj_tok is None:
+                continue
+            # "partnered with X to develop Y": the infinitive states a goal.
+            # Planned predicates keep their own explicit modality.
+            if (
+                token.tag_ == "VB"
+                and any(c.dep_ == "aux" and c.lower_ == "to" for c in token.children)
+                and not _predicate(token).startswith("planned_")
+            ):
                 continue
 
             prep = next(
@@ -302,10 +371,19 @@ class DepPatternExtractor:
                         )
                         if storage_ent is not None:
                             obj_ent = storage_ent
+                    # "funded the initial phase of the project": the vague
+                    # head only scopes the named thing after "of".
+                    if obj_ent is None and o_tok.lemma_.lower() in _VAGUE_HEAD_NOUNS:
+                        of = next((c for c in o_tok.children
+                                   if c.dep_ == "prep" and c.lower_ == "of"), None)
+                        whole = next((c for c in of.children if c.dep_ == "pobj"), None) if of is not None else None
+                        if whole is not None:
+                            obj_ent = _token_to_entity(whole, span_map, chunk_id, coref_map, entity_by_id)
                     if obj_ent is None and token.lemma_ in {
-                        "provide", "supply", "store", "use", "develop", "lead"
+                        "provide", "supply", "store", "use", "develop", "lead",
+                        "contribute",
                     }:
-                        obj_ent = _noun_phrase_product(o_tok, chunk_id)
+                        obj_ent = _noun_phrase_concept(o_tok, chunk_id, participle)
                     if obj_ent is None and token.lemma_ in {"monitor"}:
                         obj_ent = _token_to_entity(
                             o_tok, span_map, chunk_id, coref_map, entity_by_id
@@ -494,21 +572,47 @@ class DepPatternExtractor:
                         if candidate_ent is not None:
                             head_ent = candidate_ent
                             subject_token = candidate
+                            # "Patel leads the NLP team at Acme": the person
+                            # holds that role at the organization.
+                            if (
+                                token.lower_ == "at"
+                                and governor.dep_ == "dobj"
+                                and ancestor.lemma_ in _ROLE_VERBS
+                            ):
+                                predicate = "role_at"
                             governor = ancestor
                             break
-            obj_ent  = _token_to_entity(pobj, span_map, chunk_id, coref_map, entity_by_id)
-            if head_ent and obj_ent:
-                triples.append(RawTriple(
-                    subject=head_ent,
-                    predicate=predicate,
-                    object=obj_ent,
-                    prep=token.text,
-                    source="prep",
-                    sent_idx=sent_idx,
-                    chunk_id=chunk_id,
-                    dep_distance=_dep_distance(subject_token or governor, pobj),
-                    has_negation=_has_negation(governor),
-                ))
+            subjects = [head_ent] if head_ent else []
+            # "She collaborated with Patel on DocSense": Patel worked on it too.
+            if head_ent and token.lower_ == "on" and governor.lemma_ in {"collaborate", "work"}:
+                for sibling in governor.children:
+                    if sibling.dep_ == "prep" and sibling.lower_ == "with":
+                        for partner in sibling.children:
+                            if partner.dep_ != "pobj":
+                                continue
+                            for partner_tok in (partner, *partner.conjuncts):
+                                partner_ent = _token_to_entity(
+                                    partner_tok, span_map, chunk_id, coref_map, entity_by_id)
+                                if partner_ent is not None:
+                                    subjects.append(partner_ent)
+            for object_token in (pobj, *pobj.conjuncts):
+                obj_ent = _token_to_entity(object_token, span_map, chunk_id, coref_map, entity_by_id)
+                if obj_ent is None:
+                    obj_ent = _named_by_clause(object_token, span_map, chunk_id, coref_map, entity_by_id)
+                if obj_ent is None:
+                    continue
+                for subject_ent in subjects:
+                    triples.append(RawTriple(
+                        subject=subject_ent,
+                        predicate=predicate,
+                        object=obj_ent,
+                        prep=token.text,
+                        source="prep",
+                        sent_idx=sent_idx,
+                        chunk_id=chunk_id,
+                        dep_distance=_dep_distance(subject_token or governor, object_token),
+                        has_negation=_has_negation(governor),
+                    ))
         return triples
 
     def _nominal(
@@ -660,6 +764,39 @@ class DepPatternExtractor:
                     subject = _subject_token(verb) if verb is not None else None
                     if subject is not None:
                         emit(ent(subject), "located_at", ent(obj_tok), negated=_has_negation(verb))
+            # "Neel Shah ... will serve as its CEO": a role held at the
+            # organization the possessive refers to.
+            if lemma == "serve":
+                as_prep = next((c for c in token.children if c.dep_ == "prep" and c.lower_ == "as"), None)
+                role = next((c for c in as_prep.children if c.dep_ == "pobj"), None) if as_prep is not None else None
+                owner = next((c for c in role.children if c.dep_ == "poss"), None) if role is not None else None
+                holder = _subject_token(token)
+                if owner is not None and holder is not None and role.lemma_.lower() in ROLE_NOUNS:
+                    holder_ent = ent(holder)
+                    if holder_ent is None or holder_ent.type != "PERSON":
+                        # "its director, Neel Shah, will ..." names the holder in apposition.
+                        named = next((c for c in holder.children if c.dep_ == "appos"), None)
+                        holder_ent = ent(named) if named is not None else None
+                    owner_ent = ent(owner)
+                    if holder_ent and owner_ent and holder_ent.type == "PERSON" and owner_ent.type == "ORG":
+                        emit(holder_ent, role.lemma_.lower(), owner_ent, negated=_has_negation(token))
+                        emit(holder_ent, "role_at", owner_ent, negated=_has_negation(token))
+            # Agentless passive: "These relationships are stored in Neo4j" is a
+            # statement about the product currently under discussion.
+            if (
+                lemma == "store" and coref_map and entity_by_id
+                and not any(c.dep_ == "agent" for c in token.children)
+            ):
+                patient = next((c for c in token.children if c.dep_ == "nsubjpass"), None)
+                storage_prep = next((c for c in token.children if c.dep_ == "prep" and c.lower_ == "in"), None)
+                storage = next((c for c in storage_prep.children if c.dep_ == "pobj"), None) if storage_prep is not None else None
+                topic_ent = entity_by_id.get(coref_map.get(f"{chunk_id}:topic", ""))
+                if (patient is not None and storage is not None and topic_ent is not None
+                        and ent(patient) is None):
+                    storage_ent = ent(storage)
+                    if storage_ent and storage_ent.canonical_name != topic_ent.canonical_name:
+                        triples.append(RawTriple(topic_ent, "store", storage_ent, "in", "prep",
+                                                 sent_idx, chunk_id, 2, _has_negation(token)))
             if lemma == "shareholder":
                 owner = next((c for c in token.children if c.dep_ == "poss"), None)
                 if token.dep_ == "nsubj" and owner is not None:

@@ -44,6 +44,14 @@ class NormalizedTriple:
     claim_id: str = ""
 
 
+# "Rao described Meridian as ..." is speech about an entity, not a relation
+# between the speaker and that entity.
+_REPORTING_VERBS = frozenset({
+    "describe", "say", "state", "note", "mention", "call", "tell", "add",
+    "comment", "explain", "praise", "criticize", "discuss",
+})
+
+
 # ── Loader ────────────────────────────────────────────────────────────────────
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -84,7 +92,7 @@ class PredicateNormalizer:
                 not self._include_extended_relations
                 and rel_name in {
                     "LEADS", "PROVIDED", "FUNDED", "DEVELOPED", "USES",
-                    "STORES_DATA_IN",
+                    "STORES_DATA_IN", "WORKED_ON", "REPRESENTED",
                 }
             ):
                 continue
@@ -108,7 +116,8 @@ class PredicateNormalizer:
                     subj, obj = obj, subj
 
                 # Entity type pair guard (checked AFTER swap)
-                type_pairs = conf.get("entity_type_pairs", [])
+                # A lemma may narrow the relation's pairs ("represent").
+                type_pairs = entry.get("entity_type_pairs", conf.get("entity_type_pairs", []))
                 if type_pairs:
                     pair = [subj.type, obj.type]
                     if pair not in type_pairs:
@@ -123,6 +132,9 @@ class PredicateNormalizer:
                     sent_idx=triple.sent_idx,
                     extractor=triple.source,
                 )
+
+        if triple.predicate in _REPORTING_VERBS:
+            return None
 
         # Preserve the old direct API contract for callers that inspect raw
         # normalization results. The ingestion pipeline explicitly excludes

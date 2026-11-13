@@ -18,6 +18,7 @@ from KnowledgeGraphApp.Ingestion.Preprocessor import preprocess, build_windows, 
 from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner
 from KnowledgeGraphApp.Extraction.DocumentEntities import recover_document_entities
 from KnowledgeGraphApp.Extraction.CorefResolver import RuleBasedCorefResolver
+from KnowledgeGraphApp.Extraction.DiscourseRelations import infer_discourse_relations
 from KnowledgeGraphApp.Extraction.RelationExtractor import DepPatternExtractor
 from KnowledgeGraphApp.Extraction.PredicateNormalizer import PredicateNormalizer
 from KnowledgeGraphApp.Extraction.RelationScorer import RelationScorer
@@ -32,6 +33,17 @@ from KnowledgeGraphApp.GraphStorage.Neo4jClient import create_driver
 logger = logging.getLogger(__name__)
 
 
+def _is_title_line(text: str) -> bool:
+    """A short, unpunctuated, title-case first chunk is the document title."""
+    words = text.split()
+    return (
+        "\n" not in text
+        and 2 <= len(words) <= 12
+        and text.rstrip()[-1] not in ".!?,;:"
+        and sum(1 for word in words if word[:1].isupper()) >= 0.6 * len(words)
+    )
+
+
 def _remove_document_title_entities(
     chunks,
     entities_by_chunk: dict[str, list],
@@ -41,6 +53,9 @@ def _remove_document_title_entities(
     first_chunk_id = chunks[0].chunk_id if chunks else None
     for chunk in chunks:
         entities = entities_by_chunk.get(chunk.chunk_id, [])
+        if chunk.chunk_id == first_chunk_id and len(chunks) > 1 and _is_title_line(chunk.text):
+            filtered[chunk.chunk_id] = []
+            continue
         if chunk.chunk_id != first_chunk_id or "\n" not in chunk.text:
             filtered[chunk.chunk_id] = entities
             continue
@@ -525,6 +540,9 @@ def run_pipeline_nlp(
                            for t in normalized if t.relation_type != "RELATED_TO"}
         normalized = [t for t in normalized if t.relation_type != "RELATED_TO" or
                       (t.chunk_id, t.subject.canonical_name, t.object.canonical_name) not in supported_pairs]
+        # Facts completed from a neighbouring sentence (elided "of <company>",
+        # the deal a condition or review belongs to).
+        normalized.extend(infer_discourse_relations(chunks, entities_by_chunk, normalized))
         if getattr(settings, "debug_pipeline", False):
             logger.debug(
                 "[%s] raw triples=%d, supported triples=%d",

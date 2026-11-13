@@ -7,6 +7,7 @@
     PRODUCT: "#D97706",
     EVENT: "#DC2626",
     LAW: "#7C3AED",
+    CONCEPT: "#0D9488",
   };
   const DEFAULT_COLOR = "#64748B";
 

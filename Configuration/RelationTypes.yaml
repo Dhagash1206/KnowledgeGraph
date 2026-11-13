@@ -33,10 +33,23 @@ canonical_relations:
   ADVISER_TO:
     lemmas:
       - {lemma: "advise", requires_prep: null, lemma_swap: false}
-      - {lemma: "represent", requires_prep: null, lemma_swap: false}
+      # A firm representing a company advises it; a person representing
+      # their organization is covered by REPRESENTED.
+      - {lemma: "represent", requires_prep: null, lemma_swap: false, entity_type_pairs: [[ORG, ORG]]}
       - {lemma: "adviser", requires_prep: null, lemma_swap: false}
       - {lemma: "advisor", requires_prep: null, lemma_swap: false}
     entity_type_pairs: [[ORG, ORG], [PERSON, ORG]]
+
+  REPRESENTED:
+    lemmas:
+      - {lemma: "represent", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[PERSON, ORG]]
+
+  WORKED_ON:
+    lemmas:
+      - {lemma: "collaborate", requires_prep: ["on"], lemma_swap: false}
+      - {lemma: "work",        requires_prep: ["on"], lemma_swap: false}
+    entity_type_pairs: [[PERSON, PRODUCT], [ORG, PRODUCT]]
 
   OWNS:
     lemmas:
@@ -172,20 +185,21 @@ canonical_relations:
       - {lemma: "chairwoman",  requires_prep: null, lemma_swap: false}
       - {lemma: "chairperson", requires_prep: null, lemma_swap: false}
       - {lemma: "chief",       requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[PERSON, ORG], [PERSON, PRODUCT], [ORG, ORG]]
+    entity_type_pairs: [[PERSON, ORG], [PERSON, PRODUCT], [PERSON, CONCEPT], [ORG, ORG]]
 
   PROVIDED:
     lemmas:
       - {lemma: "provide", requires_prep: null, lemma_swap: false}
       - {lemma: "deliver", requires_prep: null, lemma_swap: false}
       - {lemma: "offer",   requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [ORG, GPE]]
+      - {lemma: "contribute", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [ORG, CONCEPT], [ORG, GPE]]
 
   SUPPLIED:
     lemmas:
       - {lemma: "supply", requires_prep: null, lemma_swap: false}
       - {lemma: "vendor", requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[ORG, PRODUCT], [ORG, ORG]]
+    entity_type_pairs: [[ORG, PRODUCT], [ORG, CONCEPT], [ORG, ORG]]
 
   MONITORS:
     lemmas:
@@ -206,7 +220,7 @@ canonical_relations:
       - {lemma: "build",    requires_prep: null, lemma_swap: false}
       - {lemma: "engineer", requires_prep: null, lemma_swap: false}
       - {lemma: "design",   requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[PERSON, PRODUCT], [ORG, PRODUCT], [ORG, ORG]]
+    entity_type_pairs: [[PERSON, PRODUCT], [ORG, PRODUCT], [PERSON, CONCEPT], [ORG, CONCEPT], [ORG, ORG]]
 
   USES:
     lemmas:
@@ -214,10 +228,10 @@ canonical_relations:
       - {lemma: "adopt",     requires_prep: null, lemma_swap: false}
       - {lemma: "deploy",    requires_prep: null, lemma_swap: false}
       - {lemma: "integrate", requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[PERSON, ORG], [ORG, ORG], [ORG, PRODUCT]]
+    entity_type_pairs: [[PERSON, ORG], [ORG, ORG], [ORG, PRODUCT], [ORG, CONCEPT], [PRODUCT, CONCEPT], [PRODUCT, PRODUCT]]
 
   STORES_DATA_IN:
     lemmas:
       - {lemma: "store",   requires_prep: ["in"], lemma_swap: false}
       - {lemma: "extract", requires_prep: ["in"], lemma_swap: false}
-    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [PRODUCT, ORG]]
+    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [ORG, CONCEPT], [PRODUCT, ORG], [PRODUCT, PRODUCT]]

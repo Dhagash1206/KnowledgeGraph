@@ -146,7 +146,7 @@ def test_location_modifier_uses_nearest_organization(nlp):
     assert location[0].subject.text == "TechNova Solutions"
 
 
-def test_supported_verb_can_extract_noun_phrase_product(nlp):
+def test_supported_verb_can_extract_noun_phrase_concept(nlp):
     extractor = DepPatternExtractor()
     text = "IISc provided the computing infrastructure."
     doc = nlp(text)
@@ -161,7 +161,8 @@ def test_supported_verb_can_extract_noun_phrase_product(nlp):
 
     provided = [t for t in triples if t.predicate == "provide"]
     assert provided
-    assert provided[0].object.type == "PRODUCT"
+    assert provided[0].object.type == "CONCEPT"
+    assert provided[0].object.canonical_name == "computing infrastructure"
     assert provided[0].object.text == "the computing infrastructure"
 
 

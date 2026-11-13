@@ -87,3 +87,6 @@ tmp/
 Java/**/build/
 Java/**/Probe/*.class
 Datasets/prepared/
+
+# Generated project report
+ProjectReport.pdf

@@ -71,6 +71,9 @@ _GENERIC_ACRONYMS = frozenset({
     "API", "UI", "UX", "HTML", "URL", "HTTP", "HTTPS", "SQL", "LLM",
     "ML", "NLP", "CPU", "GPU", "RAM", "ROM", "OS", "SaaS", "B2B", "B2C",
 })
+# These generic acronyms are real organizations or places, so the model's
+# label for them is kept.
+_NAMED_GENERIC_ACRONYMS = frozenset({"US", "USA", "UK", "EU", "UN"})
 _KNOWN_TECH_PRODUCTS = frozenset({"postgresql", "mongodb", "neo4j"})
 _ACRONYM_DEFINITION = re.compile(
     r"\b(?:[A-Z][A-Za-z]+|of|the|and)(?:\s+(?:[A-Z][A-Za-z]+|of|the|and)){1,8}\s*"
@@ -259,6 +262,9 @@ def spacy_entities(doc: Doc, chunk_id: str) -> list[Entity]:
     for ent in doc.ents:
         itype = SPACY_TO_INTERNAL.get(ent.label_)
         if itype is None:
+            continue
+        # "NLP", "CEO" or "API" is a field, role or technology, not an entity.
+        if ent.text in _GENERIC_ACRONYMS and ent.text not in _NAMED_GENERIC_ACRONYMS:
             continue
         eid = f"{chunk_id}:{ent.start_char}:{ent.end_char}"
         entities.append(Entity(

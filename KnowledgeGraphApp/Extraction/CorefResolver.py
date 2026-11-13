@@ -46,9 +46,21 @@ DEF_NP_PERSON = frozenset({
     "the founder", "the chairman", "the chief",
 })
 
+# "the project" refers back only to a product the document itself introduced
+# as a project ("a project called DocSense", "the DocSense project").
+PRODUCT_KINDS = frozenset({
+    "project", "platform", "system", "product", "tool", "software",
+    "application", "app", "framework", "library",
+})
+DEF_NP_PRODUCT = frozenset(f"the {kind}" for kind in PRODUCT_KINDS)
+_KIND_BEFORE = re.compile(r"\b(\w+)\s+(?:called|named|known\s+as)\s+$", re.IGNORECASE)
+_KIND_AFTER = re.compile(r"^\s+(\w+)\b")
+# A product stays the discourse topic for this many following sentences.
+TOPIC_SENTENCE_SPAN = 3
+
 ALIAS_THRESHOLD = 0.88   # Jaro-Winkler score above which two names are aliases
 
-_PHRASES = PRONOUNS_PERSON | PRONOUNS_ORG | DEF_NP_PERSON | DEF_NP_ORG
+_PHRASES = PRONOUNS_PERSON | PRONOUNS_ORG | DEF_NP_PERSON | DEF_NP_ORG | DEF_NP_PRODUCT
 _COREF_PATTERN = re.compile(
     r"\b(?:" + "|".join(re.escape(p) for p in sorted(_PHRASES, key=len, reverse=True)) + r")\b",
     re.IGNORECASE,
@@ -79,9 +91,18 @@ class RuleBasedCorefResolver:
         recent_person: Optional[Entity] = None
         recent_org:    Optional[Entity] = None
         all_entities: list[Entity] = []
+        # kind word -> most recent product introduced with that kind
+        recent_product_by_kind: dict[str, Entity] = {}
+        kinds_by_name: dict[str, set[str]] = {}
+        topic: Optional[Entity] = None
+        topic_position = 0
 
-        for chunk in chunks:
+        for position, chunk in enumerate(chunks):
             ents = entities_by_chunk.get(chunk.chunk_id, [])
+            # The topic key lets an agentless passive ("the results are stored
+            # in Neo4j") be attributed to the product under discussion.
+            if topic is not None and position - topic_position <= TOPIC_SENTENCE_SPAN:
+                resolution[f"{chunk.chunk_id}:topic"] = topic.entity_id
 
             # Process mentions in reading order. A later object must not become
             # the antecedent of an earlier pronoun ("He hired Alice").
@@ -96,9 +117,26 @@ class RuleBasedCorefResolver:
                         recent_person = mention
                     elif mention.type == "ORG":
                         recent_org = mention
+                    elif mention.type == "PRODUCT":
+                        kinds = kinds_by_name.setdefault(mention.canonical_name, set())
+                        for match in (_KIND_BEFORE.search(chunk.text[:mention.start_char]),
+                                      _KIND_AFTER.match(chunk.text[mention.end_char:])):
+                            if match and match.group(1).lower() in PRODUCT_KINDS:
+                                kinds.add(match.group(1).lower())
+                        for kind in kinds:
+                            recent_product_by_kind[kind] = mention
+                        if kinds:
+                            topic, topic_position = mention, position
                     continue
                 phrase = mention.group().lower()
-                antecedent = recent_person if phrase in PRONOUNS_PERSON | DEF_NP_PERSON else recent_org
+                if phrase in DEF_NP_PRODUCT:
+                    antecedent = recent_product_by_kind.get(phrase.removeprefix("the "))
+                    if antecedent is not None:
+                        topic, topic_position = antecedent, position
+                elif phrase in PRONOUNS_PERSON | DEF_NP_PERSON:
+                    antecedent = recent_person
+                else:
+                    antecedent = recent_org
                 # Position keys distinguish repeated pronouns in one sentence.
                 resolution[f"{chunk.chunk_id}:ref:{mention.start()}"] = antecedent.entity_id if antecedent else ""
                 if antecedent:
