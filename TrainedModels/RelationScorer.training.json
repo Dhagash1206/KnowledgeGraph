@@ -1,0 +1,74 @@
+{
+  "feature_version": 2,
+  "feature_count": 43,
+  "label_rule": "mapped relations: exact directed gold fact; other relations: any gold relation between the two entities; unaligned arguments left out",
+  "training": {
+    "documents": 3052,
+    "rows": 4416,
+    "positive": 1810,
+    "by_relation_type": {
+      "RELATED_TO": 4182,
+      "LOCATED_IN": 77,
+      "LEADS": 42,
+      "FOUNDED": 28,
+      "MEMBER_OF": 25,
+      "EMPLOYED_BY": 19,
+      "COLLABORATED_WITH": 18,
+      "ACQUIRED": 11,
+      "OWNS": 7,
+      "USES": 2,
+      "ADVISER_TO": 2,
+      "SUBSIDIARY_OF": 1,
+      "DEVELOPED": 1,
+      "ASSIGNED_TO": 1
+    },
+    "excluded_training_titles": [
+      "Lark Force"
+    ]
+  },
+  "cross_validation": {
+    "scheme": "5-fold, stratified, grouped by document",
+    "f1_mean": 0.6394,
+    "f1_std": 0.0239
+  },
+  "validation_note": "odd-indexed dev documents; not used for fitting",
+  "validation": {
+    "rows": 366,
+    "positive": 165,
+    "precision_at_0.5": 0.6667,
+    "recall_at_0.5": 0.6424,
+    "f1_at_0.5": 0.6543,
+    "roc_auc": 0.7664,
+    "brier": 0.1944
+  },
+  "validation_related_to_gate": {
+    "gate": 0.6,
+    "related_to_triples": 343,
+    "related_to_correct": 158,
+    "kept": 99,
+    "kept_correct": 76
+  },
+  "train_sha256": "c40a137a1c57f3e2daaf5ebf511eaa1518f9305ffaa3052d46271921a91826f2",
+  "dev_sha256": "051ee1d057204a5d08ef5502beacdadf191245b5eaf0e29ec2c607cf002c016f",
+  "validation_previous_model": {
+    "rows": 366,
+    "positive": 165,
+    "precision_at_0.5": 0.6054,
+    "recall_at_0.5": 0.5394,
+    "f1_at_0.5": 0.5705,
+    "roc_auc": 0.667,
+    "brier": 0.2732
+  },
+  "validation_previous_related_to_gate": {
+    "gate": 0.6,
+    "related_to_triples": 343,
+    "related_to_correct": 158,
+    "kept": 121,
+    "kept_correct": 82
+  },
+  "legacy_gold_check": {
+    "rows": 20,
+    "correct": 14
+  },
+  "artifact_sha256": "2b1706b08d928cd19920a1a20af2e9422164b2f07589a8e133e4d34794166f6f"
+}

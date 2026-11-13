@@ -129,8 +129,9 @@ def main(args):
     classifiers = []
     with threadpool_limits(limits=2):
         for j, relation in enumerate(RELATION_TYPES):
-            # Positives are well under 1% of production candidates; unweighted, the
-            # classifiers scored almost nothing above threshold (recall 0.003).
+            # Positives are well under 1% of production candidates. Weighting alone
+            # does not rescue recall: only about 17% of dev gold facts are reachable
+            # through production candidates, which caps this model upstream.
             model = LogisticRegression(C=4, solver='liblinear', max_iter=500, random_state=20261110,
                                        class_weight='balanced')
             model.fit(x, y[:, j])
