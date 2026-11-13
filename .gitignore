@@ -88,5 +88,7 @@ Java/**/build/
 Java/**/Probe/*.class
 Datasets/prepared/
 
-# Generated project report
+# Generated reports and local sample documents
 ProjectReport.pdf
+ModelHyperparameters.pdf
+meridian_relational_data_story.pdf

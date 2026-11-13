@@ -22,6 +22,24 @@ def load_manifest_assignments(manifest_path: Path) -> Dict[str, Dict[str, Any]]:
     return assignments
 
 
+def sibling_manifest(data_file: Path) -> Optional[Path]:
+    """The Manifest.json written next to a prepared split file, if there is one."""
+    candidate = Path(data_file).parent / "Manifest.json"
+    return candidate if candidate.exists() else None
+
+
+def _assignments_for(manifest_path: Optional[Path]) -> Dict[str, Dict[str, Any]]:
+    """Load assignments; a manifest that was asked for but is missing is an error."""
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Split manifest not found: {manifest_path}. Refusing to skip the custody check."
+            )
+        return load_manifest_assignments(manifest_path)
+    default_manifest = Path("Datasets/prepared/v2_redocred/Manifest.json")
+    return load_manifest_assignments(default_manifest) if default_manifest.exists() else {}
+
+
 def verify_split_custody(
     records: List[Dict[str, Any]],
     expected_split: Optional[str] = None,
@@ -33,14 +51,7 @@ def verify_split_custody(
     Raises:
         ValueError if any record belongs to a protected split, fails split assignment, or is an unauthorized fixture.
     """
-    assignments: Dict[str, Dict[str, Any]] = {}
-    if manifest_path is not None and manifest_path.exists():
-        assignments = load_manifest_assignments(manifest_path)
-    else:
-        # Check default locations
-        default_manifest = Path("Datasets/prepared/v2_redocred/Manifest.json")
-        if default_manifest.exists():
-            assignments = load_manifest_assignments(default_manifest)
+    assignments = _assignments_for(manifest_path)
 
     for doc in records:
         doc_id = doc.get("document_id", "")
@@ -97,13 +108,7 @@ def verify_cross_split_disjointness(
     manifest_path: Optional[Path] = None,
 ) -> None:
     """Enforce strict document ID and group_key disjointness across dataset splits."""
-    assignments = {}
-    if manifest_path is not None and manifest_path.exists():
-        assignments = load_manifest_assignments(manifest_path)
-    else:
-        default_manifest = Path("Datasets/prepared/v2_redocred/Manifest.json")
-        if default_manifest.exists():
-            assignments = load_manifest_assignments(default_manifest)
+    assignments = _assignments_for(manifest_path)
 
     seen_docs: Dict[str, str] = {}
     seen_groups: Dict[str, str] = {}

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     contextual_v2_allow_unverified: bool = False
 
     # Entity resolution
-    resolution_threshold: float = 0.85
+    resolution_threshold: float = 0.65  # tuned by Tools/TrainEntityResolver.py
     min_related_confidence: float = 0.60
 
     # Auth (empty = disabled)

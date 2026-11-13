@@ -4,12 +4,15 @@ Blocking:
   1. Token-overlap (stopword-filtered, corporate suffixes removed, bucket cap 100)
   2. Initials-key  ("IBM" ↔ "International Business Machines")
 
-Scoring (Logistic Regression, trained on ResolutionGold.jsonl, k-fold CV):
+Scoring (Logistic Regression; Tools/TrainEntityResolver.py trains it on
+Re-DocRED alias clusters and tunes the merge threshold on held-out documents):
   - jaro_winkler similarity
   - TF-IDF char n-gram cosine similarity
   - token overlap ratio
-  - initials match (binary feature, NOT a separate bonus)
   - abbreviation score (one name is a prefix abbreviation of the other)
+  - token containment, same first / last word, word-count ratio, single-word flag
+  Each feature appears once for all types and once per PERSON / ORG / GPE,
+  because "X" vs "X Y" is usually one company but two different places.
 
 Cross-document resolution:
   Before writing a new entity, query Neo4j full-text index + initials_key
@@ -18,6 +21,7 @@ Cross-document resolution:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import defaultdict
 from itertools import combinations
@@ -30,6 +34,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 from KnowledgeGraphApp.Extraction.EntityRecognizer import Entity
+
+logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL_PATH = _PROJECT_ROOT / "TrainedModels" / "EntityResolver.joblib"
@@ -130,18 +136,24 @@ def _lucene_escape(text: str) -> str:
 class _TFIDFCache:
     """Lazy char-ngram TF-IDF similarity (refit per batch)."""
 
+    def __init__(self) -> None:
+        self._vec: Optional[TfidfVectorizer] = None
+
     def fit(self, names: list[str]) -> None:
         self._vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4))
         self._matrix = self._vec.fit_transform(names)
         self._names = names
 
     def cosine(self, a: str, b: str) -> float:
-        try:
-            va = self._vec.transform([a])
-            vb = self._vec.transform([b])
-            return float(cosine_similarity(va, vb)[0][0])
-        except Exception:
-            return 0.0
+        vectorizer = self._vec
+        if vectorizer is None:
+            # Not fitted yet (a graph lookup before any document batch): use
+            # the two names alone instead of silently scoring 0.0.
+            try:
+                vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4)).fit([a, b])
+            except ValueError:  # both names empty: no n-grams to compare
+                return 0.0
+        return float(cosine_similarity(vectorizer.transform([a]), vectorizer.transform([b]))[0][0])
 
 
 _tfidf = _TFIDFCache()
@@ -149,14 +161,80 @@ _tfidf = _TFIDFCache()
 
 # ── Feature vector ────────────────────────────────────────────────────────────
 
-def _feature_vector(a_name: str, b_name: str) -> list[float]:
+# A separate binary "initials match" feature used to sit next to the
+# abbreviation score. It was that same score thresholded at 0.8, so the two
+# were perfectly collinear on the training data and received equal weights.
+BASE_FEATURE_NAMES = (
+    "jaro_winkler", "tfidf_cosine", "token_overlap", "abbreviation_score",
+    "token_containment", "same_last_word", "same_first_word",
+    "word_count_ratio", "single_word_name",
+)
+TYPED_BLOCKS = ("PERSON", "ORG", "GPE")
+FEATURE_NAMES = (
+    BASE_FEATURE_NAMES
+    + tuple(f"{entity_type}:{name}" for entity_type in TYPED_BLOCKS for name in BASE_FEATURE_NAMES)
+    + tuple(f"is_{entity_type}" for entity_type in TYPED_BLOCKS)
+)
+
+
+def _base_features(a_name: str, b_name: str) -> list[float]:
+    a_tokens, b_tokens = set(_tokenize(a_name)), set(_tokenize(b_name))
+    a_words, b_words = a_name.casefold().split(), b_name.casefold().split()
+    both_have_words = bool(a_words) and bool(b_words)
+    shorter, longer = sorted((len(a_words), len(b_words)))
     return [
         JaroWinkler.similarity(a_name, b_name),
         _tfidf.cosine(a_name, b_name),
         _token_overlap_ratio(a_name, b_name),
-        float(_abbreviation_score(a_name, b_name) >= 0.8),
         _abbreviation_score(a_name, b_name),
+        # Share of the shorter name's tokens found in the longer one.
+        len(a_tokens & b_tokens) / min(len(a_tokens), len(b_tokens)) if a_tokens and b_tokens else 0.0,
+        float(both_have_words and a_words[-1] == b_words[-1]),
+        float(both_have_words and a_words[0] == b_words[0]),
+        shorter / longer if longer else 0.0,
+        float(shorter == 1),
     ]
+
+
+def _feature_vector(a_name: str, b_name: str, entity_type: Optional[str] = None) -> list[float]:
+    """Shared block, then the same values in the block of the entity type.
+
+    A type outside TYPED_BLOCKS (or None) leaves the typed blocks at zero, so
+    such pairs are scored by the shared weights alone.
+    """
+    base = _base_features(a_name, b_name)
+    vector = list(base)
+    for block_type in TYPED_BLOCKS:
+        vector.extend(base if entity_type == block_type else [0.0] * len(base))
+    vector.extend(float(entity_type == block_type) for block_type in TYPED_BLOCKS)
+    return vector
+
+
+def decided_by_rule(a: Entity, b: Entity) -> Optional[float]:
+    """Score for pairs settled before the classifier is consulted, else None."""
+    if a.type == b.type and a.canonical_name.casefold() == b.canonical_name.casefold():
+        return 1.0
+    if _is_person_name_conflict(a, b):
+        return 0.0
+    if _abbreviation_score(a.canonical_name, b.canonical_name) >= 0.9:
+        return 1.0
+    return None
+
+
+def fit_document_names(entities: list[Entity]) -> None:
+    """Fit the TF-IDF space on one document's names, as resolution does."""
+    _tfidf.fit([e.canonical_name for e in entities])
+
+
+def build_classifier():
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    return Pipeline([
+        ("scaler", StandardScaler()),
+        ("lr", LogisticRegression(C=1.0, max_iter=2000, class_weight="balanced")),
+    ])
 
 
 # ── Blocking ──────────────────────────────────────────────────────────────────
@@ -223,20 +301,24 @@ class EntityResolver:
         if MODEL_PATH.exists():
             try:
                 import joblib
-                return joblib.load(MODEL_PATH)
-            except Exception:
-                pass
+                model = joblib.load(MODEL_PATH)
+                expected = getattr(model, "n_features_in_", len(FEATURE_NAMES))
+                if expected != len(FEATURE_NAMES):
+                    # Without this check every prediction would raise and the
+                    # resolver would silently use the heuristic instead.
+                    raise ValueError(f"model expects {expected} features, "
+                                     f"this code builds {len(FEATURE_NAMES)}; retrain it")
+                return model
+            except Exception as exc:
+                logger.warning("Entity resolver model %s could not be loaded (%s); "
+                               "using the heuristic score.", MODEL_PATH, exc)
         return None
 
     def _score(self, a: Entity, b: Entity) -> float:
-        if a.type == b.type and a.canonical_name.casefold() == b.canonical_name.casefold():
-            return 1.0
-        if _is_person_name_conflict(a, b):
-            return 0.0
-        abbreviation = _abbreviation_score(a.canonical_name, b.canonical_name)
-        if abbreviation >= 0.9:
-            return 1.0
-        fv = _feature_vector(a.canonical_name, b.canonical_name)
+        rule_score = decided_by_rule(a, b)
+        if rule_score is not None:
+            return rule_score
+        fv = _feature_vector(a.canonical_name, b.canonical_name, a.type)
         if self._lr is not None:
             try:
                 return float(self._lr.predict_proba([fv])[0][1])
@@ -254,7 +336,7 @@ class EntityResolver:
         if not entities:
             return {}
 
-        _tfidf.fit([e.canonical_name for e in entities])
+        fit_document_names(entities)
         pairs = build_candidate_pairs(entities)
 
         # Union-Find
@@ -334,7 +416,7 @@ class EntityResolver:
 
         for cand in candidates:
             cand_name = cand["name"]
-            fv = _feature_vector(name, cand_name)
+            fv = _feature_vector(name, cand_name, entity.type)
             if self._lr is not None:
                 try:
                     prob = float(self._lr.predict_proba([fv])[0][1])
@@ -356,16 +438,21 @@ class EntityResolver:
 
     @staticmethod
     def train(gold_path: str) -> dict:
-        """Train LR on ResolutionGold.jsonl with k-fold CV."""
+        """Train LR on a small flat gold file ({"name_a", "name_b", "label"} rows).
+
+        The shipped model comes from Tools/TrainEntityResolver.py, which has
+        thousands of pairs; this stays for quick experiments and tests.
+        """
         import joblib
-        from sklearn.linear_model import LogisticRegression
         from sklearn.model_selection import StratifiedKFold, cross_val_score
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.pipeline import Pipeline
 
         records = [json.loads(ln) for ln in Path(gold_path).read_text().splitlines() if ln.strip()]
         if not records:
             raise ValueError("Gold set is empty.")
+
+        # Fit the TF-IDF space first, as resolve_within_doc does at inference.
+        # Without this the cosine feature was 0.0 for every training row.
+        _tfidf.fit([name for rec in records for name in (rec["name_a"], rec["name_b"])])
 
         X, y = [], []
         for rec in records:
@@ -376,10 +463,7 @@ class EntityResolver:
 
         X_arr, y_arr = np.array(X), np.array(y)
 
-        pipe = Pipeline([
-            ("scaler", StandardScaler()),
-            ("lr", LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced")),
-        ])
+        pipe = build_classifier()
 
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         cv_scores = cross_val_score(pipe, X_arr, y_arr, cv=skf, scoring="f1")

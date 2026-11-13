@@ -233,6 +233,13 @@ def _noun_phrase_concept(token: Token, chunk_id: str, first: Optional[Token] = N
 
 
 _ROLE_VERBS = frozenset({"lead", "head", "manage", "run", "direct", "oversee"})
+# Verbs whose common-noun object is worth a concept node of its own.
+_CONCEPT_OBJECT_VERBS = frozenset({
+    "provide", "supply", "store", "use", "develop", "lead", "contribute",
+    "monitor", "predict", "forecast", "contain",
+})
+_FUNDING_NOUNS = frozenset({"funding", "fund", "financing", "grant", "support", "money"})
+_RECEIVE_VERBS = frozenset({"receive", "obtain", "secure", "get", "win"})
 
 
 def _named_by_clause(token: Token, span_map, chunk_id, coref_map, entity_by_id) -> Optional[Entity]:
@@ -379,15 +386,8 @@ class DepPatternExtractor:
                         whole = next((c for c in of.children if c.dep_ == "pobj"), None) if of is not None else None
                         if whole is not None:
                             obj_ent = _token_to_entity(whole, span_map, chunk_id, coref_map, entity_by_id)
-                    if obj_ent is None and token.lemma_ in {
-                        "provide", "supply", "store", "use", "develop", "lead",
-                        "contribute",
-                    }:
+                    if obj_ent is None and token.lemma_ in _CONCEPT_OBJECT_VERBS:
                         obj_ent = _noun_phrase_concept(o_tok, chunk_id, participle)
-                    if obj_ent is None and token.lemma_ in {"monitor"}:
-                        obj_ent = _token_to_entity(
-                            o_tok, span_map, chunk_id, coref_map, entity_by_id
-                        )
                     if (
                         token.lemma_ == "store"
                         and subj_ent is not None
@@ -797,6 +797,35 @@ class DepPatternExtractor:
                     if storage_ent and storage_ent.canonical_name != topic_ent.canonical_name:
                         triples.append(RawTriple(topic_ent, "store", storage_ent, "in", "prep",
                                                  sent_idx, chunk_id, 2, _has_negation(token)))
+            # "It receives funding through Grant GR-5521 from the Fund": the
+            # source funds the recipient, by way of the named instrument.
+            if lemma in _RECEIVE_VERBS and token.pos_ == "VERB" and any(
+                    c.dep_ == "dobj" and c.lemma_.lower() in _FUNDING_NOUNS for c in token.children):
+                recipient = _subject_token(token)
+                recipient_ent = ent(recipient) if recipient is not None else None
+                by_prep = {}
+                for prep in (t for t in token.subtree if t.dep_ == "prep"):
+                    target = next((c for c in prep.children if c.dep_ == "pobj"), None)
+                    if target is not None:
+                        by_prep.setdefault(prep.lower_, ent(target))
+                funder = by_prep.get("from")
+                instrument = by_prep.get("through") or by_prep.get("via") or by_prep.get("under")
+                negated = _has_negation(token)
+                emit(funder, "fund", recipient_ent, negated=negated)
+                emit(instrument, "fund", recipient_ent, negated=negated)
+                emit(funder, "provide", instrument, negated=negated)
+            # "Risk RSK-09 concerns delayed sensor maintenance": the parser
+            # reads "concerns" as a noun inside one long noun phrase.
+            if lemma == "concern" and token.pos_ == "NOUN" and token.i > sent.start and token.i < token.head.i:
+                topic_ent = ent(token.nbor(-1))
+                about = sent.doc[token.i + 1:token.head.i + 1]
+                name = _LEADING_DETERMINER.sub("", about.text.strip(" .,;:"))
+                if topic_ent is not None and len(name.split()) >= 2:
+                    emit(topic_ent, "concern", Entity(
+                        entity_id=f"{chunk_id}:concept:{about.start_char}:{about.end_char}",
+                        text=about.text, canonical_name=name, type="CONCEPT",
+                        start_char=about.start_char, end_char=about.end_char,
+                        source="noun_phrase", chunk_id=chunk_id, sentence=sent.doc.text))
             if lemma == "shareholder":
                 owner = next((c for c in token.children if c.dep_ == "poss"), None)
                 if token.dep_ == "nsubj" and owner is not None:

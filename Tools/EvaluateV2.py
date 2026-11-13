@@ -212,7 +212,7 @@ def evaluate_document_production(
 
     # Predict mentions via NER runner
     doc_spacy = nlp(text)
-    ents = ner_runner.extract_entities(text, doc_spacy, chunk_id=doc["document_id"])
+    ents = ner_runner.run(doc_spacy, doc["document_id"], text)
     pred_mentions = [
         MentionRecord(
             id=e.entity_id,
@@ -242,7 +242,9 @@ def evaluate_document_production(
     claims = extractor.extract_from_document(doc["document_id"], text, pred_mentions)
 
     predicted_facts: Set[Tuple[str, str, str]] = set()
-    unmatched_fp = 0
+    # Unmatched predictions are counted once per predicted fact, like matched
+    # ones, not once per mention pair that expresses the same fact.
+    unmatched_facts: Set[Tuple[str, str, str]] = set()
 
     for c in claims:
         if evaluated_relations is not None and c.relation not in evaluated_relations:
@@ -257,7 +259,8 @@ def evaluate_document_production(
         if s_gold is not None and o_gold is not None and s_gold != o_gold:
             predicted_facts.add((s_gold, c.relation, o_gold))
         else:
-            unmatched_fp += 1
+            unmatched_facts.add((s_cid, c.relation, o_cid))
+    unmatched_fp = len(unmatched_facts)
 
     tp = len(gold_relations & predicted_facts)
     fp = len(predicted_facts - gold_relations) + unmatched_fp
@@ -411,7 +414,9 @@ def audit_acceptance_gates(
     for doc in records:
         if doc.get("data_origin") == "test_fixture":
             continue
-        reviewer = doc.get("annotation_provenance", {}).get("reviewer", "")
+        # Prepared Re-DocRED records store provenance as a plain string.
+        provenance = doc.get("annotation_provenance")
+        reviewer = provenance.get("reviewer", "") if isinstance(provenance, dict) else ""
         if reviewer and reviewer not in ("machine", "unreviewed", "synthetic", "gemini"):
             # Check if doc has finance relations
             g_rels = {str(f[1]) for f in doc.get("gold_relations", [])}

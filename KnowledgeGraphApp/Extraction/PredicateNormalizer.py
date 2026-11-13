@@ -93,6 +93,8 @@ class PredicateNormalizer:
                 and rel_name in {
                     "LEADS", "PROVIDED", "FUNDED", "DEVELOPED", "USES",
                     "STORES_DATA_IN", "WORKED_ON", "REPRESENTED",
+                    "PART_OF", "ASSIGNED_TO", "CONTAINS", "PREDICTS",
+                    "CONCERNS", "COORDINATES",
                 }
             ):
                 continue

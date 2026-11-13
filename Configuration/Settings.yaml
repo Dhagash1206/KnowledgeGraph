@@ -3,7 +3,7 @@ pipeline_mode: accurate
 max_upload_mb: 50
 window_size: 3
 window_stride: 2
-resolution_threshold: 0.85
+resolution_threshold: 0.65  # tuned by Tools/TrainEntityResolver.py on held-out documents
 debug_pipeline: false
 intermediate_graph_dir: Datasets/Processed
 

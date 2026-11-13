@@ -86,7 +86,7 @@ NEO4J_PASSWORD=changeme
 NEO4J_URI=bolt://localhost:7687
 PIPELINE_MODE=accurate
 MAX_UPLOAD_MB=50
-RESOLUTION_THRESHOLD=0.85
+RESOLUTION_THRESHOLD=0.65
 ```
 
 ### 3. Start Neo4j Database
@@ -236,7 +236,7 @@ Predicates that do not match the configured lemma, preposition, and type pair ar
 excluded from the ingested graph.
 
 ### Benchmark & Model Training
-Evaluate NER quality and train the Logistic Regression scorers on annotated gold sets using 5-fold cross-validation:
+Evaluate NER quality on the small gold sets, and retrain the entity resolver and relation scorer on Re-DocRED (`Tools/TrainEntityResolver.py`, `Tools/TrainRelationScorer.py`):
 ```bash
 # Run evaluation
 python Tools/BenchmarkQuality.py --eval Datasets/EvalGold/

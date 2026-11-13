@@ -7,6 +7,8 @@ missing or ambiguous, no relation is produced.
   - Elliptical ownership:  "Cedar owns 22% of Meridian. Mehta owns 51%."
   - Approval condition:    "Completion is conditional on approval from the CCI."
   - Deal due diligence:    "Grant Thornton conducted financial due diligence."
+  - Consortium membership: "X is a partnership of ... Other partners are A and B."
+  - Programme coordinator: "The programme is coordinated by A."
 """
 from __future__ import annotations
 
@@ -37,6 +39,19 @@ _DUE_DILIGENCE = re.compile(
 )
 
 
+# "Meridian Research Consortium is a partnership of universities ..."
+_GROUP_DEFINITION = re.compile(
+    r"^\s+is\s+an?\s+(?:partnership|consortium|alliance|coalition|network|association)\s+of\b",
+    re.IGNORECASE,
+)
+_PARTNERS_ARE = re.compile(r"\b(?:partners|members)\s+(?:are|include)\s+(?:the\s+)?$", re.IGNORECASE)
+_RUN_BY = re.compile(
+    r"\b[Tt]he\s+(?P<noun>programme|program|initiative|project|consortium|partnership)\s+is\s+"
+    r"(?P<verb>coordinated|led|managed|run|administered)\s+by\s+(?:the\s+)?$"
+)
+GROUP_CONFIDENCE = 0.65
+
+
 def _triple(relation: str, subject: Entity, obj: Entity, chunk, predicate: str,
             confidence: float) -> NormalizedTriple:
     return NormalizedTriple(
@@ -56,6 +71,13 @@ def infer_discourse_relations(chunks, entities_by_chunk, normalized) -> list[Nor
     acquirers = [t.subject for t in normalized if t.relation_type in {"PLANS_TO_ACQUIRE", "ACQUIRED"}]
     targets = [t.object for t in normalized if t.relation_type in {"PLANS_TO_ACQUIRE", "ACQUIRED"}]
     acquirer, target = _only(acquirers) if acquirers else None, _only(targets) if targets else None
+
+    # The document's one consortium-like body, and the sentence defining it.
+    groups = [(entity, chunk.text) for chunk in chunks
+              for entity in entities_by_chunk.get(chunk.chunk_id, [])
+              if entity.type == "ORG" and _GROUP_DEFINITION.match(chunk.text[entity.end_char:])]
+    group = _only([entity for entity, _ in groups]) if groups else None
+    group_definition = groups[0][1].lower() if groups else ""
 
     inferred: list[NormalizedTriple] = []
     owned: Entity | None = None
@@ -86,4 +108,21 @@ def infer_discourse_relations(chunks, entities_by_chunk, normalized) -> list[Nor
                                                  acquirer.canonical_name if acquirer else ""}:
                     inferred.append(_triple("ASSESSED", entity, target, chunk,
                                             "due_diligence", DEAL_CONFIDENCE))
+
+        if group is None:
+            continue
+        organizations = [e for e in entities if e.type == "ORG" and e.canonical_name != group.canonical_name]
+        for entity in organizations:
+            before = chunk.text[:entity.start_char]
+            if _PARTNERS_ARE.search(before):
+                # The listed partners are this and every later organization.
+                members = {e.canonical_name: e for e in organizations if e.start_char >= entity.start_char}
+                inferred.extend(_triple("MEMBER_OF", member, group, chunk, "partner", GROUP_CONFIDENCE)
+                                for member in members.values())
+            run_by = _RUN_BY.search(before)
+            # "The programme" is the group's own only if its definition names one.
+            if run_by and (run_by["noun"].lower() in {"consortium", "partnership"}
+                           or run_by["noun"].lower() in group_definition):
+                relation = "COORDINATES" if run_by["verb"].lower() in {"coordinated", "administered"} else "LEADS"
+                inferred.append(_triple(relation, entity, group, chunk, run_by["verb"].lower(), GROUP_CONFIDENCE))
     return inferred

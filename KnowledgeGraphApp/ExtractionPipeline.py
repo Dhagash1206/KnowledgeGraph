@@ -19,6 +19,10 @@ from KnowledgeGraphApp.Extraction.EntityRecognizer import NERRunner
 from KnowledgeGraphApp.Extraction.DocumentEntities import recover_document_entities
 from KnowledgeGraphApp.Extraction.CorefResolver import RuleBasedCorefResolver
 from KnowledgeGraphApp.Extraction.DiscourseRelations import infer_discourse_relations
+from KnowledgeGraphApp.Extraction.RecordIdentifiers import (
+    link_contained_records,
+    resolve_record_identifiers,
+)
 from KnowledgeGraphApp.Extraction.RelationExtractor import DepPatternExtractor
 from KnowledgeGraphApp.Extraction.PredicateNormalizer import PredicateNormalizer
 from KnowledgeGraphApp.Extraction.RelationScorer import RelationScorer
@@ -311,6 +315,7 @@ def run_pipeline_nlp(
 
         entities_by_chunk = _remove_document_title_entities(chunks, entities_by_chunk)
         entities_by_chunk = recover_document_entities(chunks, entities_by_chunk)
+        entities_by_chunk = resolve_record_identifiers(chunks, entities_by_chunk)
         all_entities = [
             entity for chunk_entities in entities_by_chunk.values()
             for entity in chunk_entities
@@ -498,15 +503,6 @@ def run_pipeline_nlp(
             )
             raw_triples.extend(triples)
 
-        # Relation extraction may add a source-supported concept entity when
-        # a supported verb's object is a noun phrase rather than a named entity.
-        entity_by_id = {e.entity_id: e for e in all_entities}
-        for triple in raw_triples:
-            for entity in (triple.subject, triple.object):
-                if entity.entity_id not in entity_by_id:
-                    all_entities.append(entity)
-                    entity_by_id[entity.entity_id] = entity
-
         # Preserve preposition context and polarity until normalization.
         seen_keys: set = set()
         deduped_triples = []
@@ -536,13 +532,28 @@ def run_pipeline_nlp(
         ]
         # A specific relation supersedes a generic apposition from the same
         # evidence; retaining both makes the graph look artificially denser.
-        supported_pairs = {(t.chunk_id, t.subject.canonical_name, t.object.canonical_name)
-                           for t in normalized if t.relation_type != "RELATED_TO"}
+        # The pair is unordered: "X receives funding from Y" yields the
+        # specific edge Y -> X and a generic one X -> Y.
+        def evidence_pair(t):
+            return (t.chunk_id, frozenset((t.subject.canonical_name, t.object.canonical_name)))
+
+        supported_pairs = {evidence_pair(t) for t in normalized if t.relation_type != "RELATED_TO"}
         normalized = [t for t in normalized if t.relation_type != "RELATED_TO" or
-                      (t.chunk_id, t.subject.canonical_name, t.object.canonical_name) not in supported_pairs]
+                      evidence_pair(t) not in supported_pairs]
         # Facts completed from a neighbouring sentence (elided "of <company>",
         # the deal a condition or review belongs to).
         normalized.extend(infer_discourse_relations(chunks, entities_by_chunk, normalized))
+        normalized = link_contained_records(chunks, entities_by_chunk, normalized)
+
+        # Relation extraction may add a source-supported concept entity when
+        # a supported verb's object is a noun phrase rather than a named
+        # entity. Only concepts that ended up in a kept relation become nodes.
+        entity_by_id = {e.entity_id: e for e in all_entities}
+        for triple in normalized:
+            for entity in (triple.subject, triple.object):
+                if entity.entity_id not in entity_by_id:
+                    all_entities.append(entity)
+                    entity_by_id[entity.entity_id] = entity
         if getattr(settings, "debug_pipeline", False):
             logger.debug(
                 "[%s] raw triples=%d, supported triples=%d",

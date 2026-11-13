@@ -80,5 +80,66 @@
     "fn": 422
   },
   "elapsed_seconds": 16.8,
-  "artifact_sha256": "76ab8b2dc4888ca49e91f0c55f46a60c79c0a2fcb0417658e3c94cd12e169bf5"
+  "artifact_sha256": "76ab8b2dc4888ca49e91f0c55f46a60c79c0a2fcb0417658e3c94cd12e169bf5",
+  "dev_gold_entity_metrics_note": "optimistic: thresholds were tuned on these same documents",
+  "dev_held_out_metrics": {
+    "scheme": "thresholds tuned on one half of dev documents (even/odd), scored on the other; both halves summed",
+    "per_relation": {
+      "FOUNDED": {
+        "tp": 11,
+        "fp": 29,
+        "fn": 27
+      },
+      "EMPLOYED_BY": {
+        "tp": 28,
+        "fp": 59,
+        "fn": 49
+      },
+      "MEMBER_OF": {
+        "tp": 70,
+        "fp": 166,
+        "fn": 198
+      },
+      "OWNS": {
+        "tp": 35,
+        "fp": 203,
+        "fn": 110
+      },
+      "SUBSIDIARY_OF": {
+        "tp": 21,
+        "fp": 113,
+        "fn": 64
+      }
+    },
+    "thresholds_per_half": {
+      "FOUNDED": [
+        0.5751539582303978,
+        0.5127066953066962
+      ],
+      "EMPLOYED_BY": [
+        0.7736718709199727,
+        0.6555866335196074
+      ],
+      "MEMBER_OF": [
+        0.6075722180981065,
+        0.7885306719638998
+      ],
+      "OWNS": [
+        0.17721041071647273,
+        0.22108474538023262
+      ],
+      "SUBSIDIARY_OF": [
+        0.2893946796986383,
+        0.2896098866930972
+      ]
+    },
+    "totals": {
+      "tp": 165,
+      "fp": 570,
+      "fn": 448,
+      "precision": 0.2245,
+      "recall": 0.2692,
+      "f1": 0.2448
+    }
+  }
 }

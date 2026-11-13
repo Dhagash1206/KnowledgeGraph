@@ -62,7 +62,10 @@ def validate_model_artifacts(
 
     # 2. Check model hash custody between Model.pt and Thresholds.json
     recorded_model_hash = thresholds_data.get("model_sha256")
-    if recorded_model_hash and recorded_model_hash != actual_model_hash:
+    if not recorded_model_hash:
+        # Thresholds are only valid for the model they were fitted on.
+        rejection_reasons.append("Thresholds.json records no model_sha256; calibration cannot be tied to Model.pt")
+    elif recorded_model_hash != actual_model_hash:
         rejection_reasons.append(
             f"Model hash mismatch: thresholds recorded {recorded_model_hash}, actual Model.pt is {actual_model_hash}"
         )

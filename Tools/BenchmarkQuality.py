@@ -47,10 +47,10 @@ def evaluate_ner(gold_path: Path) -> dict:
     return {"precision": round(precision, 3), "recall": round(recall, 3), "f1": round(f1, 3)}
 
 
-def train_relation_scorer(gold_path: Path) -> dict:
-    from KnowledgeGraphApp.Extraction.RelationScorer import RelationScorer
-    print("  Training relation scorer ...")
-    return RelationScorer.train(str(gold_path))
+def run_trainer(script: str) -> None:
+    """Run a Re-DocRED trainer; each writes its model and a .training.json report."""
+    import subprocess
+    subprocess.run([sys.executable, str(Path(__file__).parent / script)], check=True)
 
 
 def evaluate_relations(gold_path: Path) -> dict:
@@ -100,16 +100,10 @@ def evaluate_relations(gold_path: Path) -> dict:
     }
 
 
-def train_entity_resolver(gold_path: Path) -> dict:
-    from KnowledgeGraphApp.GraphStorage.EntityResolver import EntityResolver
-    print("  Training entity resolver ...")
-    return EntityResolver.train(str(gold_path))
-
-
 def main():
     parser = argparse.ArgumentParser(description="Doc2Graph benchmark & training")
     parser.add_argument("--eval", required=True, help="Path to Datasets/EvalGold/ directory")
-    parser.add_argument("--train", action="store_true", help="Train scorers on gold sets")
+    parser.add_argument("--train", action="store_true", help="Retrain the entity resolver and relation scorer on Re-DocRED")
     args = parser.parse_args()
 
     eval_dir = Path(args.eval)
@@ -130,22 +124,16 @@ def main():
         print(f"  Relations (regression set) P={result['precision']}  R={result['recall']}  F1={result['f1']}")
         print(f"  Exact relation documents: {result['exact_documents']}/{result['documents']}")
 
-    # Train scorers
+    # Train the two default models. The gold files in --eval hold about 20
+    # rows each, far too few to fit on, so they serve only as a sanity check
+    # inside the trainers' reports.
     if args.train:
         print()
-        rel_gold = eval_dir / "RelationsGold.jsonl"
-        if rel_gold.exists():
-            r = train_relation_scorer(rel_gold)
-            print(f"  Relation scorer CV F1: {r['cv_f1_mean']:.3f} +/- {r['cv_f1_std']:.3f}")
+        if not Path("Datasets/External/ReDocRed/train_revised.json").exists():
+            print("  [Train] Datasets/External/ReDocRed/ not found — skipping")
         else:
-            print("  [Relation scorer] RelationsGold.jsonl not found — skipping")
-
-        res_gold = eval_dir / "ResolutionGold.jsonl"
-        if res_gold.exists():
-            r = train_entity_resolver(res_gold)
-            print(f"  Entity resolver  CV F1: {r['cv_f1_mean']:.3f} +/- {r['cv_f1_std']:.3f}")
-        else:
-            print("  [Entity resolver] ResolutionGold.jsonl not found — skipping")
+            run_trainer("TrainEntityResolver.py")
+            run_trainer("TrainRelationScorer.py")
 
     print()
 

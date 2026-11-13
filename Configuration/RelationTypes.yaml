@@ -93,7 +93,7 @@ canonical_relations:
       - {lemma: "employ",    requires_prep: null, lemma_swap: true}
       - {lemma: "appoint",   requires_prep: null, lemma_swap: true}
       - {lemma: "name",      requires_prep: ["as", "to"], lemma_swap: true}
-      - {lemma: "work",      requires_prep: ["for", "at"], lemma_swap: false}
+      - {lemma: "work",      requires_prep: ["for", "at", "in"], lemma_swap: false}
       - {lemma: "executive", requires_prep: ["at", "of"], lemma_swap: false}
       - {lemma: "officer",   requires_prep: ["at", "of"], lemma_swap: false}
       - {lemma: "manager",   requires_prep: ["at", "of"], lemma_swap: false}
@@ -159,14 +159,15 @@ canonical_relations:
       - {lemma: "partnership", requires_prep: ["with"], lemma_swap: false}
       - {lemma: "team",        requires_prep: ["with", "up with"], lemma_swap: false}
       - {lemma: "ally",        requires_prep: ["with"], lemma_swap: false}
-      - {lemma: "collaborate", requires_prep: ["with"], lemma_swap: false}
+      # A person collaborating with an organization is COLLABORATED_WITH.
+      - {lemma: "collaborate", requires_prep: ["with"], lemma_swap: false, entity_type_pairs: [[ORG, ORG]]}
     entity_type_pairs: [[ORG, ORG], [PERSON, ORG]]
 
   COLLABORATED_WITH:
     lemmas:
       - {lemma: "collaborate", requires_prep: ["with"], lemma_swap: false}
       - {lemma: "work",        requires_prep: ["with"], lemma_swap: false}
-    entity_type_pairs: [[PERSON, PERSON], [ORG, ORG]]
+    entity_type_pairs: [[PERSON, PERSON], [ORG, ORG], [PERSON, ORG]]
 
   LEADS:
     lemmas:
@@ -206,13 +207,14 @@ canonical_relations:
       - {lemma: "monitor", requires_prep: null, lemma_swap: false}
       - {lemma: "audit",   requires_prep: null, lemma_swap: false}
       - {lemma: "track",   requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[ORG, GPE], [ORG, PRODUCT], [ORG, ORG]]
+    entity_type_pairs: [[ORG, GPE], [ORG, PRODUCT], [ORG, ORG], [ORG, CONCEPT], [PRODUCT, CONCEPT], [PRODUCT, GPE]]
 
   FUNDED:
     lemmas:
       - {lemma: "fund",   requires_prep: null, lemma_swap: false}
       - {lemma: "grant",  requires_prep: null, lemma_swap: false}
-    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [PERSON, ORG]]
+    # CONCEPT subject: a named grant or award funds the project.
+    entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [PERSON, ORG], [CONCEPT, PRODUCT], [CONCEPT, ORG]]
 
   DEVELOPED:
     lemmas:
@@ -235,3 +237,39 @@ canonical_relations:
       - {lemma: "store",   requires_prep: ["in"], lemma_swap: false}
       - {lemma: "extract", requires_prep: ["in"], lemma_swap: false}
     entity_type_pairs: [[ORG, ORG], [ORG, PRODUCT], [ORG, CONCEPT], [PRODUCT, ORG], [PRODUCT, PRODUCT]]
+
+  # ── Record-style relations (database and project documents) ──────────────
+
+  PART_OF:
+    lemmas:
+      # A person belonging to an organization is MEMBER_OF (matched earlier).
+      - {lemma: "belong", requires_prep: ["to"], lemma_swap: false}
+    entity_type_pairs: [[ORG, ORG], [CONCEPT, ORG], [PRODUCT, ORG], [CONCEPT, PRODUCT], [PRODUCT, PRODUCT]]
+
+  ASSIGNED_TO:
+    lemmas:
+      - {lemma: "assign",   requires_prep: ["to"], lemma_swap: false}
+      - {lemma: "allocate", requires_prep: ["to"], lemma_swap: false}
+    entity_type_pairs: [[CONCEPT, ORG], [PRODUCT, ORG], [CONCEPT, PERSON], [PRODUCT, PERSON], [PERSON, ORG], [PERSON, PRODUCT]]
+
+  CONTAINS:
+    lemmas:
+      - {lemma: "contain",  requires_prep: null, lemma_swap: false}
+      - {lemma: "comprise", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[PRODUCT, CONCEPT], [PRODUCT, PRODUCT], [ORG, ORG], [ORG, CONCEPT], [CONCEPT, CONCEPT]]
+
+  PREDICTS:
+    lemmas:
+      - {lemma: "predict",  requires_prep: null, lemma_swap: false}
+      - {lemma: "forecast", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[PRODUCT, CONCEPT], [ORG, CONCEPT], [PERSON, CONCEPT]]
+
+  CONCERNS:
+    lemmas:
+      - {lemma: "concern", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[CONCEPT, CONCEPT], [CONCEPT, PRODUCT], [CONCEPT, ORG], [EVENT, CONCEPT], [PRODUCT, CONCEPT]]
+
+  COORDINATES:
+    lemmas:
+      - {lemma: "coordinate", requires_prep: null, lemma_swap: false}
+    entity_type_pairs: [[ORG, ORG], [PERSON, ORG], [ORG, PRODUCT], [PERSON, PRODUCT], [ORG, CONCEPT], [PERSON, CONCEPT]]

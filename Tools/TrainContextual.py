@@ -28,18 +28,31 @@ from KnowledgeGraphApp.Extraction.ContextualRelations import (
     POLARITY_TO_IDX,
     MODALITY_TO_IDX,
     LIFECYCLE_TO_IDX,
+    SPECIAL_TOKENS,
     SimpleVocabulary,
     ContextualRelationModel,
     build_marked_context,
     compute_masked_loss,
 )
-from KnowledgeGraphApp.Extraction.SplitCustody import verify_split_custody, verify_cross_split_disjointness
+from KnowledgeGraphApp.Extraction.SplitCustody import (
+    sibling_manifest,
+    verify_cross_split_disjointness,
+    verify_split_custody,
+)
+
+MAX_TOKENS = 128
+
+
+def markers_fit(marked_text: str, max_len: int = MAX_TOKENS) -> bool:
+    """True when all four argument markers survive truncation to max_len tokens."""
+    kept = set(marked_text.split()[: max_len - 1])
+    return all(token in kept for token in SPECIAL_TOKENS)
 
 
 class RelationDataset(Dataset):
     """PyTorch Dataset for relation candidate classification with relation-conditioned assertions."""
 
-    def __init__(self, samples: List[Dict[str, Any]], vocab: SimpleVocabulary, max_len: int = 128):
+    def __init__(self, samples: List[Dict[str, Any]], vocab: SimpleVocabulary, max_len: int = MAX_TOKENS):
         self.samples = samples
         self.vocab = vocab
         self.max_len = max_len
@@ -104,6 +117,10 @@ def load_dataset_records(
                 record = json.loads(line)
                 records.append(record)
 
+    # The manifest written next to the split files is authoritative; without
+    # it the check would depend on the current working directory.
+    if manifest_path is None and paths:
+        manifest_path = sibling_manifest(paths[0])
     verify_split_custody(
         records=records,
         expected_split=expected_split,
@@ -116,6 +133,7 @@ def load_dataset_records(
 def extract_samples_from_records(
     records: List[Dict[str, Any]],
     wiring_test: bool = False,
+    stats: Optional[Dict[str, int]] = None,
 ) -> List[Dict[str, Any]]:
     """Extract candidate instances with marked contexts, strictly preserving input supervision masks.
 
@@ -151,6 +169,12 @@ def extract_samples_from_records(
             marked_text, _, is_truncated = build_marked_context(
                 text, (s_mention.start, s_mention.end), (o_mention.start, o_mention.end)
             )
+            # Inference abstains when an argument marker is truncated away, so
+            # such a pair must not be trained on with a zeroed argument either.
+            if not markers_fit(marked_text):
+                if stats is not None:
+                    stats["skipped_truncated"] = stats.get("skipped_truncated", 0) + 1
+                continue
 
             # Strict preservation: numeric targets where mask is True, 0.0 where False (masked from loss)
             num_targets = [float(t) if (t is not None and m) else 0.0 for t, m in zip(targets, loss_mask)]
@@ -201,12 +225,13 @@ def evaluate_model(
     """Evaluate model on validation split computing precision, recall, F1 across supervised labels."""
     model.eval()
     total_loss = 0.0
-    num_batches = 0
+    total_supervised = 0.0
 
     tp, fp, fn = 0, 0, 0
     per_rel_tp = defaultdict(int)
     per_rel_fp = defaultdict(int)
     per_rel_fn = defaultdict(int)
+    per_rel_negatives = defaultdict(int)
 
     with torch.no_grad():
         for batch in val_loader:
@@ -216,9 +241,11 @@ def evaluate_model(
             loss_mask = batch["loss_mask"].to(device)
 
             out = model(inp, pos)
-            loss, _ = compute_masked_loss(out["relation_logits"], targets, loss_mask)
-            total_loss += float(loss.item())
-            num_batches += 1
+            loss, loss_metrics = compute_masked_loss(out["relation_logits"], targets, loss_mask)
+            # Weight by supervised labels: batches differ in size and in how
+            # many labels are unmasked, so a mean of batch means is biased.
+            total_loss += float(loss.item()) * loss_metrics["supervised_targets"]
+            total_supervised += loss_metrics["supervised_targets"]
 
             probs = torch.sigmoid(out["relation_logits"])
             preds = (probs >= threshold).bool()
@@ -240,13 +267,23 @@ def evaluate_model(
                 per_rel_tp[RELATION_TYPES[r_idx]] += r_tp
                 per_rel_fp[RELATION_TYPES[r_idx]] += r_fp
                 per_rel_fn[RELATION_TYPES[r_idx]] += r_fn
+                per_rel_negatives[RELATION_TYPES[r_idx]] += (~g_r).sum().item()
+
+    # A relation with no supervised negative cannot produce a false positive,
+    # so its precision is 1.0 by construction and must not drive selection.
+    scored_relations = [r for r in RELATION_TYPES if per_rel_negatives[r] > 0]
+    s_tp = sum(per_rel_tp[r] for r in scored_relations)
+    s_fp = sum(per_rel_fp[r] for r in scored_relations)
+    s_fn = sum(per_rel_fn[r] for r in scored_relations)
+    selection_f1 = 2 * s_tp / (2 * s_tp + s_fp + s_fn) if (2 * s_tp + s_fp + s_fn) > 0 else 0.0
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return {
-        "val_loss": total_loss / max(1, num_batches),
+        "val_loss": total_loss / max(1.0, total_supervised),
+        "selection": {"relations": scored_relations, "f1": selection_f1},
         "micro": {"precision": precision, "recall": recall, "f1": f1, "tp": tp, "fp": fp, "fn": fn},
         "per_relation": {
             r: {
@@ -275,8 +312,15 @@ def train_contextual_relations(
     seed: int = 42,
     allow_fixtures: bool = False,
     wiring_test_only: bool = False,
+    allow_positive_only: bool = False,
+    patience: int = 2,
 ) -> Dict[str, Any]:
-    """Train contextual relation model with masked loss and write manifest."""
+    """Train contextual relation model with masked loss and write manifest.
+
+    Training stops once neither validation loss nor the selection score has
+    improved for `patience` epochs (0 disables this). The learning rate is
+    halved whenever validation loss fails to improve on its best value.
+    """
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -286,9 +330,11 @@ def train_contextual_relations(
 
     print(f"Loading training data from {len(train_files)} files...")
     train_records = load_dataset_records(train_files, allow_fixtures=allow_fixtures, expected_split="train")
-    train_samples = extract_samples_from_records(train_records, wiring_test=wiring_test_only)
+    sample_stats: Dict[str, int] = {}
+    train_samples = extract_samples_from_records(train_records, wiring_test=wiring_test_only, stats=sample_stats)
 
-    print(f"Loaded {len(train_samples)} supervised candidate training instances.")
+    print(f"Loaded {len(train_samples)} supervised candidate training instances "
+          f"({sample_stats.get('skipped_truncated', 0)} skipped: argument markers beyond {MAX_TOKENS} tokens).")
 
     # Count supervision support by relation
     label_support: Dict[str, Dict[str, int]] = {
@@ -304,6 +350,23 @@ def train_contextual_relations(
             else:
                 label_support[r_name]["unknown"] += 1
 
+    # With positives only, the loss is minimised by answering "yes" to every
+    # pair, and validation precision is 1.0 by construction.
+    positive_only_relations = [
+        r for r in RELATION_TYPES
+        if label_support[r]["positive"] > 0 and label_support[r]["explicit_negative"] == 0
+    ]
+    has_negatives = any(label_support[r]["explicit_negative"] > 0 for r in RELATION_TYPES)
+    if positive_only_relations:
+        print(f"WARNING: no explicit negatives for {positive_only_relations}; "
+              "these heads cannot learn to reject a pair.")
+    if not has_negatives and not wiring_test_only and not allow_positive_only:
+        raise ValueError(
+            "Training data has no explicit negative label for any relation, so the model would "
+            "learn to predict every relation for every pair. Add reviewed negatives, or pass "
+            "allow_positive_only=True (--allow-positive-only) for a research-only run."
+        )
+
     vocab = SimpleVocabulary(min_freq=1)
     vocab.build_from_texts([s["marked_text"] for s in train_samples])
     print(f"Vocabulary size: {len(vocab.token_to_idx)}")
@@ -312,7 +375,10 @@ def train_contextual_relations(
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     val_records = load_dataset_records([val_file], allow_fixtures=allow_fixtures, expected_split="validation")
-    verify_cross_split_disjointness({"train": train_records, "val": val_records})
+    verify_cross_split_disjointness(
+        {"train": train_records, "val": val_records},
+        manifest_path=sibling_manifest(train_files[0]) if train_files else None,
+    )
     val_samples = extract_samples_from_records(val_records, wiring_test=wiring_test_only)
     val_dataset = RelationDataset(val_samples, vocab)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -330,28 +396,40 @@ def train_contextual_relations(
     ).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=0)
 
     training_history = []
     best_val_f1 = -1.0
+    best_score = float("-inf")
     best_epoch = 0
+    best_val_loss = float("inf")
+    epochs_without_improvement = 0
+    stopped_early = False
+    selection_metric = "micro_f1_over_relations_with_validation_negatives"
 
     if wiring_test_only:
         print("Running wiring test: overfit verification on 32 samples...")
         model.train()
+        # One fixed batch: a new iterator per step would reshuffle and draw a
+        # different batch, which is not an overfit check.
+        batch = next(iter(train_loader))
+        inp = batch["input_ids"].to(device)
+        pos = batch["marker_positions"].to(device)
+        targets = batch["targets"].to(device)
+        loss_mask = batch["loss_mask"].to(device)
+        initial_loss = None
         for step in range(30):
-            batch = next(iter(train_loader))
-            inp = batch["input_ids"].to(device)
-            pos = batch["marker_positions"].to(device)
-            targets = batch["targets"].to(device)
-            loss_mask = batch["loss_mask"].to(device)
-
             optimizer.zero_grad()
             out = model(inp, pos)
             loss, m = compute_masked_loss(out["relation_logits"], targets, loss_mask)
+            if initial_loss is None:
+                initial_loss = float(loss.item())
             loss.backward()
             optimizer.step()
-        print(f"Wiring test final loss: {loss.item():.4f}")
-        return {"wiring_test_passed": True, "final_loss": float(loss.item())}
+        final_loss = float(loss.item())
+        print(f"Wiring test loss: {initial_loss:.4f} -> {final_loss:.4f}")
+        return {"wiring_test_passed": final_loss < initial_loss,
+                "initial_loss": initial_loss, "final_loss": final_loss}
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -420,6 +498,7 @@ def train_contextual_relations(
             "val_precision": val_metrics["micro"]["precision"],
             "val_recall": val_metrics["micro"]["recall"],
             "val_f1": val_f1,
+            "lr": optimizer.param_groups[0]["lr"],
         }
         training_history.append(log_entry)
         print(
@@ -430,10 +509,32 @@ def train_contextual_relations(
             f"Val F1: {val_f1:.4f}"
         )
 
-        if val_f1 > best_val_f1 or epoch == 1:
+        if val_metrics["selection"]["relations"]:
+            score = val_metrics["selection"]["f1"]
+        else:
+            # No validation negatives at all: F1 cannot rank epochs.
+            selection_metric = "negative_val_loss_no_validation_negatives"
+            score = -val_metrics["val_loss"]
+        improved = False
+        if score > best_score or epoch == 1:
+            best_score = score
             best_val_f1 = val_f1
             best_epoch = epoch
+            improved = True
             torch.save(model.state_dict(), output_dir / "Model.pt")
+        if val_metrics["val_loss"] < best_val_loss:
+            best_val_loss = val_metrics["val_loss"]
+            improved = True
+        scheduler.step(val_metrics["val_loss"])
+
+        # Rising validation loss with a flat score means the model is only
+        # growing more confident on the training pairs.
+        epochs_without_improvement = 0 if improved else epochs_without_improvement + 1
+        if patience and epochs_without_improvement >= patience:
+            stopped_early = True
+            print(f"Early stopping at epoch {epoch}: no improvement for {patience} epochs "
+                  f"(best epoch {best_epoch}).")
+            break
 
     # Save artifacts and manifest
     (output_dir / "Vocabulary.json").write_text(json.dumps(vocab.to_dict(), indent=2), encoding="utf-8")
@@ -448,11 +549,21 @@ def train_contextual_relations(
         "version": "2.0.0",
         "seed": seed,
         "epochs": epochs,
+        "epochs_run": len(training_history),
+        "stopped_early": stopped_early,
+        "early_stopping_patience": patience,
+        "lr_schedule": "ReduceLROnPlateau(val_loss, factor=0.5, patience=0)",
         "best_epoch": best_epoch,
         "best_val_f1": best_val_f1,
         "device": device,
         "hidden_dim": hidden_dim,
+        "embed_dim": 128,
+        "num_layers": 2,
+        "max_tokens": MAX_TOKENS,
         "lr": lr,
+        "selection_metric": selection_metric,
+        "positive_only_relations": positive_only_relations,
+        "skipped_truncated_samples": sample_stats.get("skipped_truncated", 0),
         "relations": RELATION_TYPES,
         "label_support": label_support,
         "ontology_hash": ontology_hash,
@@ -478,6 +589,10 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--allow-fixtures", action="store_true", help="Allow test fixture documents.")
     parser.add_argument("--wiring-test", action="store_true", help="Run small overfit wiring test only.")
+    parser.add_argument("--patience", type=int, default=2,
+                        help="Stop after this many epochs without improvement; 0 disables early stopping.")
+    parser.add_argument("--allow-positive-only", action="store_true",
+                        help="Research only: train although no relation has explicit negatives.")
 
     args = parser.parse_args()
     train_files = [Path(p) for p in args.train_files]
@@ -492,6 +607,8 @@ def main():
         seed=args.seed,
         allow_fixtures=args.allow_fixtures,
         wiring_test_only=args.wiring_test,
+        allow_positive_only=args.allow_positive_only,
+        patience=args.patience,
     )
 
 

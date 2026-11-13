@@ -1,4 +1,10 @@
-"""Fit relation labels from independent training data; tune on dev only."""
+"""Fit relation labels from independent training data; tune on dev only.
+
+The shipped thresholds are tuned on all development documents, so scores on
+those same documents ("dev_gold_entity_metrics") are optimistic. The honest
+figure is "dev_held_out_metrics": thresholds tuned on one half of the
+development documents and scored on the other half, in both directions.
+"""
 from __future__ import annotations
 
 import argparse
@@ -69,7 +75,8 @@ def examples(records, allowed_pairs, training):
 def tune_threshold(labels, probabilities, total_gold):
     # The gold denominator includes relations outside candidate/type coverage.
     precision, recall, thresholds = precision_recall_curve(labels, probabilities)
-    tp = recall[:-1] * labels.sum()
+    # recall * positives is a whole number; rounding keeps "tp >= 3" exact.
+    tp = np.rint(recall[:-1] * labels.sum())
     full_recall = tp / max(total_gold, 1)
     p = precision[:-1]
     f1 = np.divide(2 * p * full_recall, p + full_recall, out=np.zeros_like(p), where=p + full_recall > 0)
@@ -79,6 +86,54 @@ def tune_threshold(labels, probabilities, total_gold):
     # Stable tie-break: highest threshold among equally scoring candidates.
     best = np.flatnonzero(valid & (f1 == f1[valid].max()))[-1]
     return float(thresholds[best])
+
+
+def held_out_threshold_metrics(development, dev_y, dev_ids, scores):
+    """Two-fold cross-fitting over development documents (even / odd index).
+
+    Each half is scored with thresholds chosen on the other half, so no
+    document is scored with a threshold it helped to select.
+    """
+    document_parity = np.asarray(dev_ids) % 2
+    gold_by_parity = [Counter(), Counter()]
+    for doc_index, record in enumerate(development):
+        gold_by_parity[doc_index % 2].update(fact[1] for fact in gold_facts(record))
+    totals, per_relation, thresholds_used = Counter(), {}, {}
+    for index, relation in enumerate(RELATION_TYPES):
+        counts = Counter()
+        for scored_half in (0, 1):
+            tuning, scoring = document_parity != scored_half, document_parity == scored_half
+            threshold = tune_threshold(dev_y[tuning, index], scores[tuning, index],
+                                       gold_by_parity[1 - scored_half].get(relation, 0))
+            thresholds_used.setdefault(relation, []).append(threshold)
+            predictions = scores[scoring, index] >= threshold
+            tp = int((predictions & dev_y[scoring, index].astype(bool)).sum())
+            counts.update(tp=tp, fp=int(predictions.sum()) - tp,
+                          fn=gold_by_parity[scored_half].get(relation, 0) - tp)
+        per_relation[relation] = dict(counts)
+        totals.update(counts)
+    tp, fp, fn = totals["tp"], totals["fp"], totals["fn"]
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    return {"scheme": "thresholds tuned on one half of dev documents (even/odd), scored on the other; both halves summed",
+            "per_relation": per_relation, "thresholds_per_half": thresholds_used,
+            "totals": {"tp": tp, "fp": fp, "fn": fn, "precision": round(precision, 4), "recall": round(recall, 4),
+                       "f1": round(2 * precision * recall / (precision + recall), 4) if precision + recall else 0.0}}
+
+
+def evaluate_existing(args):
+    """Add held-out dev scores for an already trained artifact; the artifact is not rewritten."""
+    development = json.loads(args.dev.read_text(encoding="utf-8"))
+    artifact = joblib.load(args.output)
+    allowed_pairs = {tuple(p) for pairs in artifact["type_pairs"].values() for p in pairs}
+    dev_candidates, dev_y, dev_ids, _, _ = examples(development, allowed_pairs, False)
+    scores = LearnedRelationExtractor(artifact).probabilities(dev_candidates)
+    report_path = args.output.with_suffix(".training.json")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["dev_gold_entity_metrics_note"] = "optimistic: thresholds were tuned on these same documents"
+    report["dev_held_out_metrics"] = held_out_threshold_metrics(development, dev_y, dev_ids, scores)
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(json.dumps(report["dev_held_out_metrics"], indent=2), flush=True)
 
 
 def exclude_overlap(training, development):
@@ -138,12 +193,13 @@ def train(args):
     totals = Counter()
     metrics = {}
     for index, relation in enumerate(RELATION_TYPES):
-        threshold = tune_threshold(dev_y[:, index], scores[:, index], dev_gold[relation])
+        gold_count = dev_gold.get(relation, 0)  # a relation may be absent from dev
+        threshold = tune_threshold(dev_y[:, index], scores[:, index], gold_count)
         artifact["thresholds"][relation] = threshold
         predictions = scores[:, index] >= threshold
         tp = int((predictions & dev_y[:, index].astype(bool)).sum())
         fp = int(predictions.sum()) - tp
-        fn = dev_gold[relation] - tp
+        fn = gold_count - tp
         metrics[relation] = {"tp": tp, "fp": fp, "fn": fn, "threshold": threshold}
         totals.update(tp=tp, fp=fp, fn=fn)
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -151,6 +207,8 @@ def train(args):
     report = {"metadata": artifact["metadata"], "training_pairs": len(candidates), "dev_pairs": len(dev_candidates),
               "train_gold": train_gold, "train_candidate_coverage": train_covered, "dev_gold": dev_gold,
               "dev_candidate_coverage": dev_covered, "dev_gold_entity_metrics": metrics, "totals": dict(totals),
+              "dev_gold_entity_metrics_note": "optimistic: thresholds were tuned on these same documents",
+              "dev_held_out_metrics": held_out_threshold_metrics(development, dev_y, dev_ids, scores),
               "elapsed_seconds": round(time.monotonic() - start, 1),
               "artifact_sha256": hashlib.sha256(args.output.read_bytes()).hexdigest()}
     args.output.with_suffix(".training.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -159,7 +217,15 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train", type=Path, required=True)
+    parser.add_argument("--train", type=Path)
     parser.add_argument("--dev", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("TrainedModels/LearnedRelations.joblib"))
-    train(parser.parse_args())
+    parser.add_argument("--evaluate-existing", action="store_true",
+                        help="Only add held-out dev scores to the report of the artifact at --output.")
+    arguments = parser.parse_args()
+    if arguments.evaluate_existing:
+        evaluate_existing(arguments)
+    elif arguments.train is None:
+        parser.error("--train is required unless --evaluate-existing is given")
+    else:
+        train(arguments)

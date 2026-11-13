@@ -119,8 +119,9 @@ def run_benchmark(input_jsonl: Path, limit: int = 0) -> dict:
 
     ner_counts = {"strict": Counter(), "relaxed": Counter()}
     pw_counts = Counter()
-    bc_precisions = []
-    bc_recalls = []
+    # B-cubed is an average over mentions, so documents are weighted by size.
+    bc_precision_sum = bc_recall_sum = 0.0
+    bc_mentions = 0
     all_false_merges = []
 
     for doc in records:
@@ -130,8 +131,9 @@ def run_benchmark(input_jsonl: Path, limit: int = 0) -> dict:
 
         pw, bc, fms = evaluate_resolution_on_document(doc, nd_resolver)
         pw_counts.update({"tp": pw["tp"], "fp": pw["fp"], "fn": pw["fn"]})
-        bc_precisions.append(bc["precision"])
-        bc_recalls.append(bc["recall"])
+        bc_precision_sum += bc["precision"] * bc["mentions"]
+        bc_recall_sum += bc["recall"] * bc["mentions"]
+        bc_mentions += bc["mentions"]
         all_false_merges.extend(fms)
 
     def summarize_c(c):
@@ -140,8 +142,8 @@ def run_benchmark(input_jsonl: Path, limit: int = 0) -> dict:
         f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
         return {"precision": p, "recall": r, "f1": f1, **c}
 
-    avg_bcp = sum(bc_precisions) / len(bc_precisions) if bc_precisions else 1.0
-    avg_bcr = sum(bc_recalls) / len(bc_recalls) if bc_recalls else 1.0
+    avg_bcp = bc_precision_sum / bc_mentions if bc_mentions else 1.0
+    avg_bcr = bc_recall_sum / bc_mentions if bc_mentions else 1.0
     bc_f1 = 2 * avg_bcp * avg_bcr / (avg_bcp + avg_bcr) if (avg_bcp + avg_bcr) > 0 else 0.0
 
     report = {

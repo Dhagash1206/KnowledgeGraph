@@ -129,11 +129,14 @@ def main(args):
     classifiers = []
     with threadpool_limits(limits=2):
         for j, relation in enumerate(RELATION_TYPES):
-            model = LogisticRegression(C=4, solver='liblinear', max_iter=500, random_state=20261110)
+            # Positives are well under 1% of production candidates; unweighted, the
+            # classifiers scored almost nothing above threshold (recall 0.003).
+            model = LogisticRegression(C=4, solver='liblinear', max_iter=500, random_state=20261110,
+                                       class_weight='balanced')
             model.fit(x, y[:, j])
             classifiers.append(model)
     artifact = {**old, 'vectorizer': vectorizer, 'classifiers': classifiers, 'thresholds': {},
-                'metadata': {'training': 'all gold and production candidates, no class balancing or negative sampling',
+                'metadata': {'training': 'all gold and production candidates, class_weight=balanced, no negative sampling',
                              'train_documents': len(train), 'excluded_training_titles': excluded,
                              'train_sha256': hashlib.sha256(train_path.read_bytes()).hexdigest(),
                              'dev_sha256': hashlib.sha256(dev_path.read_bytes()).hexdigest(),

@@ -85,7 +85,7 @@ def bcubed_metrics(
 
     eval_mentions = [m for m in mention_to_gold if m in mention_to_pred]
     if not eval_mentions:
-        return {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+        return {"precision": 1.0, "recall": 1.0, "f1": 1.0, "mentions": 0}
 
     precisions = []
     recalls = []
@@ -101,7 +101,7 @@ def bcubed_metrics(
     r = sum(recalls) / len(recalls)
     f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
 
-    return {"precision": p, "recall": r, "f1": f1}
+    return {"precision": p, "recall": r, "f1": f1, "mentions": len(eval_mentions)}
 
 
 class NonDestructiveResolver:

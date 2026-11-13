@@ -90,6 +90,9 @@ class RuleBasedCorefResolver:
         resolution: dict[str, str] = {}   # surface_in_chunk → entity_id
         recent_person: Optional[Entity] = None
         recent_org:    Optional[Entity] = None
+        # "it" may also be a project or a database record ("RiverWatch (PRJ-220)
+        # ... It receives funding"), not only an organization.
+        recent_thing:  Optional[Entity] = None
         all_entities: list[Entity] = []
         # kind word -> most recent product introduced with that kind
         recent_product_by_kind: dict[str, Entity] = {}
@@ -116,8 +119,10 @@ class RuleBasedCorefResolver:
                     if mention.type == "PERSON":
                         recent_person = mention
                     elif mention.type == "ORG":
-                        recent_org = mention
-                    elif mention.type == "PRODUCT":
+                        recent_org = recent_thing = mention
+                    elif mention.source == "record_identifier" and mention.type != "GPE":
+                        recent_thing = mention
+                    if mention.type == "PRODUCT":
                         kinds = kinds_by_name.setdefault(mention.canonical_name, set())
                         for match in (_KIND_BEFORE.search(chunk.text[:mention.start_char]),
                                       _KIND_AFTER.match(chunk.text[mention.end_char:])):
@@ -135,6 +140,8 @@ class RuleBasedCorefResolver:
                         topic, topic_position = antecedent, position
                 elif phrase in PRONOUNS_PERSON | DEF_NP_PERSON:
                     antecedent = recent_person
+                elif phrase in PRONOUNS_ORG:
+                    antecedent = recent_thing
                 else:
                     antecedent = recent_org
                 # Position keys distinguish repeated pronouns in one sentence.

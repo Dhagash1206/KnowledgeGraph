@@ -50,8 +50,16 @@ class UTDSVM:
     def _classifier(self):
         return LinearSVC(C=self.c, class_weight=self.class_weight, random_state=42, max_iter=10000)
 
+    @staticmethod
+    def _compact_indices(matrix):
+        # Recent scikit-learn builds this matrix with 64-bit indices, which
+        # LinearSVC (liblinear) rejects; the matrix is far below the 32-bit limit.
+        matrix.indices = matrix.indices.astype(np.int32, copy=False)
+        matrix.indptr = matrix.indptr.astype(np.int32, copy=False)
+        return matrix
+
     def fit(self, records):
-        x = self.vectorizer.fit_transform([features(r) for r in records])
+        x = self._compact_indices(self.vectorizer.fit_transform([features(r) for r in records]))
         labels = np.array([r['label'] for r in records])
         self.main = self._classifier().fit(x, [family(y) for y in labels] if self.two_stage else labels)
         if self.two_stage:
@@ -64,7 +72,7 @@ class UTDSVM:
         return self
 
     def predict(self, records):
-        x = self.vectorizer.transform([features(r) for r in records])
+        x = self._compact_indices(self.vectorizer.transform([features(r) for r in records]))
         pred = self.main.predict(x)
         if not self.two_stage:
             return pred.tolist()

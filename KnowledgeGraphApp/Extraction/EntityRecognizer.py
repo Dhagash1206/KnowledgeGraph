@@ -70,6 +70,7 @@ _GENERIC_ACRONYMS = frozenset({
     "Q1", "Q2", "Q3", "Q4", "FY", "ID", "AM", "PM", "OK", "TV", "PC",
     "API", "UI", "UX", "HTML", "URL", "HTTP", "HTTPS", "SQL", "LLM",
     "ML", "NLP", "CPU", "GPU", "RAM", "ROM", "OS", "SaaS", "B2B", "B2C",
+    "DOI", "ISBN", "ISSN", "URI", "UUID", "CSV", "JSON", "XML",
 })
 # These generic acronyms are real organizations or places, so the model's
 # label for them is kept.

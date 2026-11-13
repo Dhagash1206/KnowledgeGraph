@@ -29,7 +29,7 @@ from KnowledgeGraphApp.Extraction.ContextualRelations import (
     generate_directional_candidates,
     load_ontology_type_pairs,
 )
-from KnowledgeGraphApp.Extraction.SplitCustody import verify_split_custody
+from KnowledgeGraphApp.Extraction.SplitCustody import sibling_manifest, verify_split_custody
 
 
 def file_sha256(path: Path) -> str:
@@ -104,7 +104,7 @@ def run_calibration(
     verify_split_custody(
         records=records,
         expected_split="calibration",
-        manifest_path=manifest_path,
+        manifest_path=manifest_path or sibling_manifest(calibration_file),
         allow_fixtures=allow_fixtures,
     )
 
