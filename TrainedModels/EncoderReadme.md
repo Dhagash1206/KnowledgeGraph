@@ -13,7 +13,7 @@ This backend runs [GLiREL](https://github.com/jackboyla/GLiREL) locally. It is a
 Existing installation can be inspected without changing Neo4j:
 
 ```powershell
-python Tools/InspectDocument.py AcquisitionCaseStudy.pdf --relation-backend encoder --output EvaluationResults/finance_graph_encoder.json
+python Tools/InspectDocument.py Docs/Samples/AcquisitionCaseStudy.pdf --relation-backend encoder --output EvaluationResults/finance_graph_encoder.json
 ```
 
 The original `rules` default is unchanged. `RELATION_BACKEND=encoder` explicitly selects this experimental backend; it is not recommended for production. Consult `EvaluationResults/Evaluation/EncoderDev.json` and the follow-up report before using its predictions. The [checkpoint model card](https://huggingface.co/jackboyla/glirel-large-v0#license) specifies **CC BY-NC-SA 4.0**, including a noncommercial restriction; this checkpoint is not a commercial deployment recommendation.

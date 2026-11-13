@@ -54,7 +54,7 @@ python Tools/CompareExternalEval.py --baseline EvaluationResults/Evaluation/Rule
 For an offline experimental graph from the original PDF:
 
 ```powershell
-python Tools/InspectDocument.py AcquisitionCaseStudy.pdf --relation-backend learned --output EvaluationResults/FinanceGraphLearned.json
+python Tools/InspectDocument.py Docs/Samples/AcquisitionCaseStudy.pdf --relation-backend learned --output EvaluationResults/FinanceGraphLearned.json
 ```
 
 This writes evidence-bearing predictions without changing Neo4j. More edges are not proof of correctness.

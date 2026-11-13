@@ -1,6 +1,8 @@
 """Regression tests for the extraction accuracy fixes, checked on AiResearchReport.pdf."""
 from pathlib import Path
 
+import pytest
+
 from KnowledgeGraphApp.ExtractionPipeline import run_pipeline_nlp
 from KnowledgeGraphApp.GraphStorage.GraphBuilder import build_resolved_edges
 from KnowledgeGraphApp.Ingestion.PdfCleaner import clean_pdf_text
@@ -118,7 +120,9 @@ def test_sentence_final_period_is_not_part_of_an_organization_name():
 
 
 def test_sample_report_pdf_has_no_mistyped_entities():
-    path = Path("AiResearchReport.pdf")
+    path = Path("Docs/Samples/AiResearchReport.pdf")
+    if not path.exists():
+        pytest.skip("Sample PDF is kept locally and is not part of the repository")
     result = run_pipeline_nlp(path.read_bytes(), path.name, "pdf")
     entities = {entity.name: entity.type for entity in result["resolved_entities"]}
 
@@ -151,7 +155,9 @@ def test_reporting_verb_is_not_a_relation():
 
 
 def test_acquisition_pdf_firm_typing_and_future_role():
-    path = Path("AcquisitionCaseStudy.pdf")
+    path = Path("Docs/Samples/AcquisitionCaseStudy.pdf")
+    if not path.exists():
+        pytest.skip("Sample PDF is kept locally and is not part of the repository")
     result = run_pipeline_nlp(path.read_bytes(), path.name, "pdf")
     entities = {entity.name: entity.type for entity in result["resolved_entities"]}
     names = {entity.canonical_id: entity.name for entity in result["resolved_entities"]}
@@ -188,7 +194,9 @@ def test_elided_ownership_needs_a_recent_antecedent():
 
 
 def test_acquisition_pdf_context_relations():
-    path = Path("AcquisitionCaseStudy.pdf")
+    path = Path("Docs/Samples/AcquisitionCaseStudy.pdf")
+    if not path.exists():
+        pytest.skip("Sample PDF is kept locally and is not part of the repository")
     result = run_pipeline_nlp(path.read_bytes(), path.name, "pdf")
     names = {entity.canonical_id: entity.name for entity in result["resolved_entities"]}
     edges = {(names[edge.source_id], edge.relation_type, names[edge.target_id])

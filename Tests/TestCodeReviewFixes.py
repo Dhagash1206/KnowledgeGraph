@@ -1,4 +1,4 @@
-"""Regression tests for the fixes listed in CodeReview.txt (H1-H5, M2, M4, M5, L1, L2)."""
+"""Regression tests for the fixes listed in Docs/Notes/CodeReview.txt (H1-H5, M2, M4, M5, L1, L2)."""
 from __future__ import annotations
 
 import sys

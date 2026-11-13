@@ -45,7 +45,7 @@ The before/after graphs are saved beside this report as `FinanceGraphBefore.json
 To inspect another document without Neo4j:
 
 ```powershell
-python Tools/InspectDocument.py AcquisitionCaseStudy.pdf --output EvaluationResults/FinanceGraphAfter.json
+python Tools/InspectDocument.py Docs/Samples/AcquisitionCaseStudy.pdf --output EvaluationResults/FinanceGraphAfter.json
 ```
 
 Restart the backend (or let its development reloader pick up the changes), then re-upload the PDF to regenerate its stored graph with the revised extractor. Existing database results do not change merely by editing the extraction code.

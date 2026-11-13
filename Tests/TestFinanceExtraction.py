@@ -147,7 +147,7 @@ def test_relation_schema_matches_configuration():
 
 def test_original_finance_pdf_production_pipeline():
     from Tools.InspectDocument import inspect_document
-    path = Path("AcquisitionCaseStudy.pdf")
+    path = Path("Docs/Samples/AcquisitionCaseStudy.pdf")
     if not path.exists():
         pytest.skip("User-provided PDF is not part of the repository")
     report = inspect_document(path)

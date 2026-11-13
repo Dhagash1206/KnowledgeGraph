@@ -598,7 +598,7 @@ def main():
 
 The contextual neural relation model (`contextual_v2`) implements typed directional relation extraction with entity marker pooling, assertion classification (`polarity`, `modality`, `lifecycle`), strict masked loss supervision, and calibrated thresholds.
 
-However, in accordance with the predeclared acceptance gates in `RedesignHandoff.md`, **the default production backend remains `rules`**. The `contextual_v2` model is maintained as an isolated, opt-in backend for research and pilot evaluation.
+However, in accordance with the predeclared acceptance gates in `Docs/Notes/RedesignHandoff.md`, **the default production backend remains `rules`**. The `contextual_v2` model is maintained as an isolated, opt-in backend for research and pilot evaluation.
 
 ---
 

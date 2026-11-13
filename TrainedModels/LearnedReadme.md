@@ -22,7 +22,7 @@ Training that command replaces the specified artifact. Use a different output fi
 ## Try without changing the database
 
 ```powershell
-python Tools/InspectDocument.py AcquisitionCaseStudy.pdf --relation-backend learned --output EvaluationResults/FinanceGraphLearned.json
+python Tools/InspectDocument.py Docs/Samples/AcquisitionCaseStudy.pdf --relation-backend learned --output EvaluationResults/FinanceGraphLearned.json
 ```
 
 This explicitly selects the learned backend for that invocation and writes a graph with evidence. It does not alter the running server or Neo4j. The learned backend replaces rule-based relationship extraction for that run; it does not silently mix rule predictions into its results. NER and entity resolution remain the existing pipeline components.
